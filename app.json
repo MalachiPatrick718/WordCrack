@@ -13,9 +13,14 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.wordcrack.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
+      "package": "com.wordcrack.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -25,6 +30,18 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "sentry-expo"
+    ],
+    "extra": {
+      "supabaseUrl": "https://bqdsadzvihhvermeobiv.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxZHNhZHp2aWhodmVybWVvYml2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3OTM5ODIsImV4cCI6MjA4MzM2OTk4Mn0.FQRX5bD-IK87eqTfk_9izwl6VEhOt9CE4zQzpuU29pM",
+      "sentryDsn": "YOUR_SENTRY_DSN",
+      "eas": {
+        "projectId": "4e3397c0-5f3e-40ce-93fa-1d2ff3c842e7"
+      }
     }
   }
 }

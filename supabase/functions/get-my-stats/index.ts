@@ -1,0 +1,91 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { handleCors, corsHeaders } from "../_shared/cors.ts";
+import { requireUser } from "../_shared/auth.ts";
+import { supabaseAdmin } from "../_shared/supabase.ts";
+import { getUtcDateString, json } from "../_shared/utils.ts";
+import { withCors } from "../_shared/http.ts";
+
+type Row = { puzzle_date: string; final_time_ms: number; hints_used: unknown };
+
+function daysBetweenUtc(a: string, b: string): number {
+  const da = new Date(`${a}T00:00:00Z`).getTime();
+  const db = new Date(`${b}T00:00:00Z`).getTime();
+  return Math.round((db - da) / (24 * 3600 * 1000));
+}
+
+function avg(nums: number[]): number | null {
+  if (!nums.length) return null;
+  return Math.round(nums.reduce((s, n) => s + n, 0) / nums.length);
+}
+
+Deno.serve(async (req) => {
+  const cors = handleCors(req);
+  if (cors) return cors;
+  if (req.method !== "GET") return json({ error: "Method not allowed" }, { status: 405, headers: corsHeaders });
+
+  try {
+    const user = await requireUser(req);
+    const admin = supabaseAdmin();
+
+    // Pull recent daily completions with puzzle_date
+    const { data, error } = await admin
+      .from("attempts")
+      .select("final_time_ms,hints_used,puzzles(puzzle_date)")
+      .eq("user_id", user.id)
+      .eq("mode", "daily")
+      .eq("is_completed", true)
+      .order("completed_at", { ascending: false })
+      .limit(60);
+    if (error) return json({ error: error.message }, { status: 500, headers: corsHeaders });
+
+    const rows: Row[] = (data ?? [])
+      .map((r: any) => ({
+        puzzle_date: r.puzzles?.puzzle_date as string,
+        final_time_ms: r.final_time_ms as number,
+        hints_used: r.hints_used,
+      }))
+      .filter((r) => Boolean(r.puzzle_date));
+
+    const today = getUtcDateString();
+    const best_time_ms = rows.length ? Math.min(...rows.map((r) => r.final_time_ms)) : null;
+
+    const last7 = rows.slice(0, 7).map((r) => r.final_time_ms);
+    const last30 = rows.slice(0, 30).map((r) => r.final_time_ms);
+
+    const hints_used_count = rows.reduce((sum, r) => sum + (Array.isArray(r.hints_used) ? r.hints_used.length : 0), 0);
+
+    // Current streak: consecutive puzzle_date ending today (if today's solved) otherwise 0.
+    let current_streak = 0;
+    const byDate = rows
+      .map((r) => r.puzzle_date)
+      .filter(Boolean)
+      .sort((a, b) => (a > b ? -1 : a < b ? 1 : 0));
+
+    if (byDate.length && byDate[0] === today) {
+      current_streak = 1;
+      for (let i = 1; i < byDate.length; i++) {
+        const prev = byDate[i - 1];
+        const cur = byDate[i];
+        if (daysBetweenUtc(cur, prev) === 1) current_streak += 1;
+        else break;
+      }
+    }
+
+    return json(
+      {
+        current_streak,
+        best_time_ms,
+        avg_7d_ms: avg(last7),
+        avg_30d_ms: avg(last30),
+        hint_usage_count: hints_used_count,
+      },
+      { headers: corsHeaders },
+    );
+  } catch (e) {
+    if (e instanceof Response) return withCors(e);
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    return json({ error: msg }, { status: 500, headers: corsHeaders });
+  }
+});
+
+
