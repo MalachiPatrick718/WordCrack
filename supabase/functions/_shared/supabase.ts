@@ -1,7 +1,7 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
 
 export function getEnv(name: string): string {
-  const v = Deno.env.get(name);
+  const v = (globalThis as any)?.Deno?.env?.get?.(name) as string | undefined;
   if (!v) throw new Error(`Missing env var: ${name}`);
   return v;
 }

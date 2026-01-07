@@ -1,0 +1,16 @@
+{
+  // Use the Deno language server for Supabase Edge Functions.
+  // This makes `npm:` and `jsr:` imports work (e.g. `npm:@supabase/supabase-js@2`).
+  "deno.enable": true,
+  "deno.enablePaths": ["supabase/functions"],
+  "deno.config": "supabase/functions/deno.json",
+
+  // Keep normal TS/JS tooling for the React Native app code.
+  "deno.disablePaths": ["node_modules", ".expo", "ios", "android"],
+
+  // Optional: helps when working with Deno projects.
+  "deno.lint": true,
+  "deno.unstable": true
+}
+
+

@@ -1,4 +1,4 @@
-import type { User } from "npm:@supabase/supabase-js@2";
+import type { User } from "@supabase/supabase-js";
 import { supabaseAuthed } from "./supabase.ts";
 
 export async function requireUser(req: Request): Promise<User> {
