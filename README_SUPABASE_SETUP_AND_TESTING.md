@@ -62,6 +62,23 @@ on conflict (id) do nothing;
 
 You must insert a puzzle for **today’s UTC date**.
 
+#### Recommended (admin function)
+
+Deploy `admin-create-puzzle`, set the secret `ADMIN_PUZZLE_KEY`, then create today’s puzzle like:
+
+```bash
+curl -i -X POST \
+  -H "x-admin-key: <ADMIN_PUZZLE_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{"target_word":"LETTER","theme_hint":"Space object"}' \
+  "https://bqdsadzvihhvermeobiv.supabase.co/functions/v1/admin-create-puzzle"
+```
+
+This will:
+- Choose a **random shift amount** (same for the whole puzzle) and a direction (server-only)
+- Choose some **unshifted positions**
+- Generate `cipher_word` and 6×5 `letter_sets` that always allow forming the target word
+
 Example:
 
 ```sql
@@ -116,6 +133,16 @@ From `WordCrack/`:
 - `supabase functions deploy validate-purchase`
 - `supabase functions deploy get-practice-puzzle`
 
+#### Important: JWT verification flag
+
+If you see `401 Invalid JWT` from auth-required functions even when signed in, deploy with **gateway JWT verification disabled**:
+
+```bash
+supabase functions deploy <fn-name> --no-verify-jwt
+```
+
+This repo includes `supabase/config.toml` that sets `verify_jwt = false` for all WordCrack functions, because we validate auth inside the function (via `requireUser()`).
+
 ## 6) Configure Edge Function secrets
 
 ### Required (iOS IAP validation)
@@ -144,6 +171,28 @@ Edit:
 
 Then restart Expo:
 - `npm run start`
+
+## 7.1) Fix Email OTP / confirmation emails (Supabase Auth SMTP)
+
+If you see **"Error sending confirmation email"** when tapping **Send OTP**, your Supabase project cannot deliver emails yet.
+
+### Option A (recommended): Resend via SMTP
+
+In **Supabase Dashboard**:
+- Authentication → **SMTP Settings** → enable custom SMTP and set:
+  - **Host**: `smtp.resend.com`
+  - **Port**: `465` (TLS) or `587` (STARTTLS)
+  - **Username**: `resend`
+  - **Password**: your **Resend API key** (starts with `re_...`)  ← this is the "SMTP password"
+  - **Sender name**: `WordCrack`
+  - **Sender email**: an address from a **verified domain** in Resend (example: `no-reply@yourdomain.com`)
+
+In **Resend Dashboard**:
+- Verify your sending domain (DNS records) and use that domain in the **Sender email** above.
+
+### Option B (quick test): use Resend’s default sender
+
+If you don’t have a domain verified yet, temporarily set the Sender email to a Resend-provided address (e.g. `onboarding@resend.dev`) to confirm the OTP flow works, then switch to your domain later.
 
 ## 8) Testing (Backend + App)
 

@@ -28,11 +28,14 @@ export function AuthProvider(props: { children: React.ReactNode }) {
     let mounted = true;
     supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
-      setSession(data.session ?? null);
+      const next = data.session ?? null;
+      setSession(next);
+      if (next?.access_token) supabase.functions.setAuth(next.access_token);
       setInitializing(false);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
+      if (nextSession?.access_token) supabase.functions.setAuth(nextSession.access_token);
     });
     return () => {
       mounted = false;

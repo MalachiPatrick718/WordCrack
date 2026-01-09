@@ -13,6 +13,7 @@ import { ResultsScreen } from "./screens/ResultsScreen";
 import { LeaderboardsScreen } from "./screens/LeaderboardsScreen";
 import { StatsScreen } from "./screens/StatsScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
+import { LegalScreen } from "./screens/LegalScreen";
 
 export type RootStackParamList = {
   Onboarding: undefined;
@@ -30,6 +31,7 @@ export type RootStackParamList = {
   Leaderboards: undefined;
   Stats: undefined;
   Settings: undefined;
+  Legal: { doc: "privacy" | "terms" };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -55,10 +57,15 @@ function BootRouter() {
       {!onboarded ? (
         <Stack.Screen
           name="Onboarding"
-          component={OnboardingScreen}
           options={{ headerShown: false }}
-          initialParams={undefined}
-        />
+        >
+          {(props) => (
+            <OnboardingScreen
+              {...props}
+              onComplete={() => setOnboarded(true)}
+            />
+          )}
+        </Stack.Screen>
       ) : !user ? (
         <Stack.Screen name="Auth" component={AuthScreen} options={{ title: "WordCrack" }} />
       ) : (
@@ -69,6 +76,7 @@ function BootRouter() {
           <Stack.Screen name="Leaderboards" component={LeaderboardsScreen} options={{ title: "Leaderboards" }} />
           <Stack.Screen name="Stats" component={StatsScreen} options={{ title: "Stats" }} />
           <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: "Settings" }} />
+          <Stack.Screen name="Legal" component={LegalScreen} options={{ title: "Legal" }} />
         </>
       )}
     </Stack.Navigator>

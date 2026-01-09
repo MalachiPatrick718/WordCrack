@@ -1,0 +1,32 @@
+[functions.get-today-puzzle]
+verify_jwt = false
+
+[functions.get-daily-leaderboard]
+verify_jwt = false
+
+# The Supabase Edge gateway's JWT verification currently rejects Auth JWTs (returns 401 Invalid JWT).
+# We disable gateway verification and instead validate inside each function via `requireUser()`.
+[functions.start-attempt]
+verify_jwt = false
+
+[functions.use-hint]
+verify_jwt = false
+
+[functions.submit-attempt]
+verify_jwt = false
+
+[functions.get-friends-leaderboard]
+verify_jwt = false
+
+[functions.add-friend-by-invite-code]
+verify_jwt = false
+
+[functions.get-my-stats]
+verify_jwt = false
+
+[functions.get-practice-puzzle]
+verify_jwt = false
+
+[functions.validate-purchase]
+verify_jwt = false
+

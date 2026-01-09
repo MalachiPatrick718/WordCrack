@@ -32,8 +32,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-secure-store",
-      "sentry-expo"
+      "expo-secure-store"
     ],
     "extra": {
       "supabaseUrl": "https://bqdsadzvihhvermeobiv.supabase.co",

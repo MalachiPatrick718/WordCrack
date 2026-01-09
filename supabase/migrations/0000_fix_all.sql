@@ -1,0 +1,394 @@
+-- COMPREHENSIVE FIX: Run this in Supabase SQL Editor to ensure all objects exist
+-- This script is idempotent (safe to run multiple times)
+
+-- ============================================
+-- 1. EXTENSIONS
+-- ============================================
+create extension if not exists pgcrypto with schema extensions;
+
+-- ============================================
+-- 2. HELPER FUNCTIONS
+-- ============================================
+create or replace function public.is_upper_alpha_6(s text)
+returns boolean
+language sql
+immutable
+as $$
+  select s is not null
+     and length(s) = 6
+     and s = upper(s)
+     and s ~ '^[A-Z]{6}$';
+$$;
+
+create or replace function public.validate_letter_sets(letter_sets jsonb)
+returns boolean
+language plpgsql
+immutable
+as $$
+declare
+  i int;
+  n int;
+begin
+  if letter_sets is null or jsonb_typeof(letter_sets) <> 'array' then
+    return false;
+  end if;
+  if jsonb_array_length(letter_sets) <> 6 then
+    return false;
+  end if;
+  for i in 0..5 loop
+    if jsonb_typeof(letter_sets->i) <> 'array' then
+      return false;
+    end if;
+    n := jsonb_array_length(letter_sets->i);
+    if n < 4 or n > 5 then
+      return false;
+    end if;
+  end loop;
+  return true;
+end;
+$$;
+
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+-- Use extensions schema for gen_random_bytes (Supabase hosted)
+create or replace function public.generate_invite_code()
+returns text
+language sql
+stable
+as $$
+  select substring(encode(extensions.gen_random_bytes(6), 'hex') from 1 for 8);
+$$;
+
+-- ============================================
+-- 3. TABLES (if not exist)
+-- ============================================
+create table if not exists public.puzzles (
+  id uuid primary key default gen_random_uuid(),
+  puzzle_date date not null unique,
+  target_word text not null check (public.is_upper_alpha_6(target_word)),
+  cipher_word text not null check (public.is_upper_alpha_6(cipher_word)),
+  letter_sets jsonb not null check (public.validate_letter_sets(letter_sets)),
+  theme_hint text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.attempts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  puzzle_id uuid not null references public.puzzles(id) on delete cascade,
+  mode text not null default 'daily' check (mode in ('daily','practice')),
+  started_at timestamptz not null default now(),
+  completed_at timestamptz,
+  solve_time_ms integer,
+  penalty_ms integer not null default 0 check (penalty_ms >= 0),
+  final_time_ms integer,
+  hints_used jsonb not null default '[]'::jsonb,
+  is_completed boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.profiles (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  username text not null unique,
+  avatar_url text,
+  invite_code text not null unique,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.friends (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  friend_user_id uuid not null references auth.users(id) on delete cascade,
+  status text not null default 'pending' check (status in ('pending','accepted','blocked')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (user_id, friend_user_id),
+  constraint friends_not_self check (user_id <> friend_user_id)
+);
+
+create table if not exists public.notification_prefs (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  push_enabled boolean not null default false,
+  push_time_local time,
+  timezone text,
+  sms_enabled boolean not null default false,
+  sms_time_local time,
+  phone_hash text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- IAP tables
+create table if not exists public.products (
+  id text primary key,
+  type text not null check (type in ('subscription','non_consumable')),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.purchases (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  platform text not null check (platform in ('ios','android')),
+  product_id text not null references public.products(id) on delete restrict,
+  original_transaction_id text,
+  transaction_id text,
+  receipt_base64 text,
+  order_id text,
+  purchase_token text,
+  package_name text,
+  purchase_time timestamptz,
+  expires_at timestamptz,
+  status text not null check (status in ('pending','active','expired','refunded','canceled')),
+  raw jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.entitlements (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  premium_until timestamptz,
+  updated_at timestamptz not null default now()
+);
+
+-- ============================================
+-- 4. TRIGGERS
+-- ============================================
+drop trigger if exists trg_attempts_updated_at on public.attempts;
+create trigger trg_attempts_updated_at
+before update on public.attempts
+for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_profiles_updated_at on public.profiles;
+create trigger trg_profiles_updated_at
+before update on public.profiles
+for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_friends_updated_at on public.friends;
+create trigger trg_friends_updated_at
+before update on public.friends
+for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_notification_prefs_updated_at on public.notification_prefs;
+create trigger trg_notification_prefs_updated_at
+before update on public.notification_prefs
+for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_purchases_updated_at on public.purchases;
+create trigger trg_purchases_updated_at
+before update on public.purchases
+for each row execute function public.set_updated_at();
+
+-- ============================================
+-- 5. CRITICAL: handle_new_user trigger
+-- This creates a profile when a user signs up
+-- ============================================
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  base_username text;
+  candidate text;
+  suffix int := 0;
+begin
+  base_username := coalesce(nullif(new.raw_user_meta_data->>'username',''), 'player');
+  base_username := regexp_replace(lower(base_username), '[^a-z0-9_]', '', 'g');
+  if length(base_username) < 3 then
+    base_username := 'player';
+  end if;
+
+  candidate := base_username;
+  while exists(select 1 from public.profiles where username = candidate) loop
+    suffix := suffix + 1;
+    candidate := base_username || '_' || suffix::text;
+  end loop;
+
+  insert into public.profiles (user_id, username, avatar_url, invite_code)
+  values (
+    new.id,
+    candidate,
+    nullif(new.raw_user_meta_data->>'avatar_url',''),
+    public.generate_invite_code()
+  )
+  on conflict (user_id) do nothing;
+
+  return new;
+end;
+$$;
+
+-- THIS IS THE CRITICAL TRIGGER - creates profile on user signup
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+after insert on auth.users
+for each row execute function public.handle_new_user();
+
+-- ============================================
+-- 6. VIEWS
+-- ============================================
+create or replace view public.puzzles_public as
+select
+  id,
+  puzzle_date,
+  cipher_word,
+  letter_sets,
+  theme_hint
+from public.puzzles;
+
+create or replace view public.profiles_public as
+select
+  user_id,
+  username,
+  avatar_url
+from public.profiles;
+
+create or replace view public.daily_leaderboard as
+select
+  p.puzzle_date,
+  a.puzzle_id,
+  a.user_id,
+  pr.username,
+  pr.avatar_url,
+  a.final_time_ms,
+  a.penalty_ms,
+  jsonb_array_length(a.hints_used) as hints_used_count
+from public.attempts a
+join public.puzzles p on p.id = a.puzzle_id
+join public.profiles_public pr on pr.user_id = a.user_id
+where a.is_completed = true
+  and a.mode = 'daily';
+
+-- ============================================
+-- 7. PERMISSIONS
+-- ============================================
+revoke all on table public.puzzles from anon, authenticated;
+revoke all on table public.profiles from anon, authenticated;
+revoke insert, update, delete on table public.attempts from anon, authenticated;
+grant select on table public.attempts to authenticated;
+
+grant select on public.puzzles_public to anon, authenticated;
+grant select on public.profiles_public to anon, authenticated;
+grant select on public.daily_leaderboard to anon, authenticated;
+
+-- IAP permissions
+revoke all on table public.products from anon, authenticated;
+revoke all on table public.purchases from anon, authenticated;
+revoke all on table public.entitlements from anon, authenticated;
+grant select on table public.products to authenticated;
+grant select on table public.entitlements to authenticated;
+
+-- ============================================
+-- 8. ROW LEVEL SECURITY
+-- ============================================
+alter table public.puzzles enable row level security;
+alter table public.attempts enable row level security;
+alter table public.profiles enable row level security;
+alter table public.friends enable row level security;
+alter table public.notification_prefs enable row level security;
+alter table public.products enable row level security;
+alter table public.purchases enable row level security;
+alter table public.entitlements enable row level security;
+
+-- Puzzles: no direct client access
+drop policy if exists puzzles_no_client_select on public.puzzles;
+create policy puzzles_no_client_select on public.puzzles for select to anon, authenticated using (false);
+
+-- Attempts: users only access their own
+drop policy if exists attempts_select_own on public.attempts;
+create policy attempts_select_own on public.attempts for select to authenticated using (user_id = auth.uid());
+
+drop policy if exists attempts_insert_own on public.attempts;
+create policy attempts_insert_own on public.attempts for insert to authenticated with check (user_id = auth.uid());
+
+drop policy if exists attempts_update_own on public.attempts;
+create policy attempts_update_own on public.attempts for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+drop policy if exists attempts_delete_own on public.attempts;
+create policy attempts_delete_own on public.attempts for delete to authenticated using (user_id = auth.uid());
+
+-- Profiles: owner only
+drop policy if exists profiles_owner_select on public.profiles;
+create policy profiles_owner_select on public.profiles for select to authenticated using (user_id = auth.uid());
+
+drop policy if exists profiles_owner_update on public.profiles;
+create policy profiles_owner_update on public.profiles for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- Friends
+drop policy if exists friends_select_involved on public.friends;
+create policy friends_select_involved on public.friends for select to authenticated using (user_id = auth.uid() or friend_user_id = auth.uid());
+
+drop policy if exists friends_insert_self on public.friends;
+create policy friends_insert_self on public.friends for insert to authenticated with check (user_id = auth.uid());
+
+drop policy if exists friends_update_involved on public.friends;
+create policy friends_update_involved on public.friends for update to authenticated using (user_id = auth.uid() or friend_user_id = auth.uid()) with check (user_id = auth.uid() or friend_user_id = auth.uid());
+
+drop policy if exists friends_delete_involved on public.friends;
+create policy friends_delete_involved on public.friends for delete to authenticated using (user_id = auth.uid() or friend_user_id = auth.uid());
+
+-- Notification prefs: owner only
+drop policy if exists notification_prefs_owner_select on public.notification_prefs;
+create policy notification_prefs_owner_select on public.notification_prefs for select to authenticated using (user_id = auth.uid());
+
+drop policy if exists notification_prefs_owner_upsert on public.notification_prefs;
+create policy notification_prefs_owner_upsert on public.notification_prefs for insert to authenticated with check (user_id = auth.uid());
+
+drop policy if exists notification_prefs_owner_update on public.notification_prefs;
+create policy notification_prefs_owner_update on public.notification_prefs for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- Products: anyone can read
+drop policy if exists products_select_all on public.products;
+create policy products_select_all on public.products for select to authenticated using (true);
+
+-- Purchases: owner only
+drop policy if exists purchases_select_own on public.purchases;
+create policy purchases_select_own on public.purchases for select to authenticated using (user_id = auth.uid());
+
+-- Entitlements: owner only
+drop policy if exists entitlements_select_own on public.entitlements;
+create policy entitlements_select_own on public.entitlements for select to authenticated using (user_id = auth.uid());
+
+-- ============================================
+-- 9. INDEXES
+-- ============================================
+create index if not exists idx_attempts_puzzle_completed_final_time
+  on public.attempts (puzzle_id, is_completed, final_time_ms)
+  where is_completed = true;
+
+create index if not exists idx_attempts_user_puzzle_mode
+  on public.attempts (user_id, puzzle_id, mode);
+
+create unique index if not exists idx_purchases_ios_original_tx_unique
+  on public.purchases (platform, original_transaction_id)
+  where platform = 'ios' and original_transaction_id is not null;
+
+create unique index if not exists idx_purchases_android_token_unique
+  on public.purchases (platform, purchase_token)
+  where platform = 'android' and purchase_token is not null;
+
+-- ============================================
+-- 10. ENSURE TODAY'S PUZZLE EXISTS
+-- ============================================
+INSERT INTO public.puzzles (puzzle_date, target_word, cipher_word, letter_sets, theme_hint)
+VALUES (
+  CURRENT_DATE,
+  'PLANET',
+  'CIPHER',
+  '[["P","Q","R","S","T"],["L","M","N","O","K"],["A","B","C","D","E"],["N","M","L","K","J"],["E","F","G","H","I"],["T","U","V","W","X"]]'::jsonb,
+  'Space object'
+)
+ON CONFLICT (puzzle_date) DO NOTHING;
+
+-- ============================================
+-- DONE! Now enable Anonymous Sign-ins in Dashboard
+-- ============================================

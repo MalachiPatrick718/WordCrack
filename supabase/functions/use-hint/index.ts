@@ -35,6 +35,9 @@ Deno.serve(async (req) => {
 
     const hintsUsed = Array.isArray(attempt.hints_used) ? attempt.hints_used : [];
     if (hintsUsed.length >= 3) return json({ error: "No hints remaining" }, { status: 400, headers: corsHeaders });
+    if (hintsUsed.some((h: any) => h?.type === hint_type)) {
+      return json({ error: "Hint already used" }, { status: 400, headers: corsHeaders });
+    }
 
     const { data: puzzle, error: puzzleErr } = await admin
       .from("puzzles")

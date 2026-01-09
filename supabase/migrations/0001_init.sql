@@ -117,7 +117,7 @@ returns text
 language sql
 stable
 as $$
-  select substring(encode(gen_random_bytes(6), 'hex') from 1 for 8);
+  select substring(encode(extensions.gen_random_bytes(6), 'hex') from 1 for 8);
 $$;
 
 create or replace function public.handle_new_user()

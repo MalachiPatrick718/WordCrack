@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { Alert, Text, View } from "react-native";
+import { Alert, Text, View, StyleSheet } from "react-native";
 import { getMyStats } from "../lib/api";
+import { colors, shadows, borderRadius } from "../theme/colors";
 
 export function StatsScreen() {
   const [loading, setLoading] = useState(true);
@@ -34,20 +35,183 @@ export function StatsScreen() {
   };
 
   return (
-    <View style={{ flex: 1, padding: 16, gap: 10 }}>
-      <Text style={{ fontSize: 18, fontWeight: "900" }}>Stats</Text>
-      {loading ? <Text style={{ color: "#666" }}>Loading…</Text> : null}
-      {!loading && stats ? (
-        <View style={{ borderWidth: 1, borderColor: "#eee", borderRadius: 16, padding: 14, gap: 8 }}>
-          <Text>Current streak: {stats.current_streak}</Text>
-          <Text>Best time: {fmtMs(stats.best_time_ms)}</Text>
-          <Text>Average (7 days): {fmtMs(stats.avg_7d_ms)}</Text>
-          <Text>Average (30 days): {fmtMs(stats.avg_30d_ms)}</Text>
-          <Text>Total hints used: {stats.hint_usage_count}</Text>
+    <View style={styles.container}>
+      <Text style={styles.title}>Your Stats</Text>
+
+      {loading && (
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading...</Text>
         </View>
-      ) : null}
+      )}
+
+      {!loading && stats && (
+        <>
+          {/* Streak Card */}
+          <View style={styles.streakCard}>
+            <Text style={styles.streakEmoji}>🔥</Text>
+            <Text style={styles.streakValue}>{stats.current_streak}</Text>
+            <Text style={styles.streakLabel}>Day Streak</Text>
+          </View>
+
+          {/* Stats Grid */}
+          <View style={styles.statsGrid}>
+            <View style={[styles.statCard, { backgroundColor: colors.tiles[0] }]}>
+              <Text style={styles.statIcon}>⚡</Text>
+              <Text style={styles.statValue}>{fmtMs(stats.best_time_ms)}</Text>
+              <Text style={styles.statLabel}>Best Time</Text>
+            </View>
+
+            <View style={[styles.statCard, { backgroundColor: colors.tiles[1] }]}>
+              <Text style={styles.statIcon}>💡</Text>
+              <Text style={styles.statValue}>{stats.hint_usage_count}</Text>
+              <Text style={styles.statLabel}>Hints Used</Text>
+            </View>
+          </View>
+
+          {/* Average Times */}
+          <View style={styles.averagesCard}>
+            <Text style={styles.cardTitle}>Average Times</Text>
+
+            <View style={styles.averageRow}>
+              <View style={styles.averageInfo}>
+                <Text style={styles.averageLabel}>Last 7 Days</Text>
+                <Text style={styles.averageValue}>{fmtMs(stats.avg_7d_ms)}</Text>
+              </View>
+              <View style={[styles.averageBadge, { backgroundColor: colors.tiles[2] }]}>
+                <Text style={styles.averageBadgeText}>7D</Text>
+              </View>
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.averageRow}>
+              <View style={styles.averageInfo}>
+                <Text style={styles.averageLabel}>Last 30 Days</Text>
+                <Text style={styles.averageValue}>{fmtMs(stats.avg_30d_ms)}</Text>
+              </View>
+              <View style={[styles.averageBadge, { backgroundColor: colors.tiles[4] }]}>
+                <Text style={styles.averageBadgeText}>30D</Text>
+              </View>
+            </View>
+          </View>
+        </>
+      )}
     </View>
   );
 }
 
-
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background.main,
+    padding: 16,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: colors.primary.darkBlue,
+    marginBottom: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingText: {
+    color: colors.text.secondary,
+    fontSize: 16,
+  },
+  streakCard: {
+    backgroundColor: colors.primary.darkBlue,
+    borderRadius: borderRadius.xl,
+    padding: 24,
+    alignItems: "center",
+    marginBottom: 16,
+    ...shadows.medium,
+  },
+  streakEmoji: {
+    fontSize: 40,
+    marginBottom: 8,
+  },
+  streakValue: {
+    fontSize: 56,
+    fontWeight: "900",
+    color: colors.primary.yellow,
+  },
+  streakLabel: {
+    fontSize: 16,
+    color: colors.primary.lightBlue,
+    marginTop: 4,
+  },
+  statsGrid: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 16,
+  },
+  statCard: {
+    flex: 1,
+    borderRadius: borderRadius.xl,
+    padding: 20,
+    alignItems: "center",
+    ...shadows.small,
+  },
+  statIcon: {
+    fontSize: 28,
+    marginBottom: 8,
+  },
+  statValue: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: colors.text.light,
+  },
+  statLabel: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.85)",
+    marginTop: 4,
+  },
+  averagesCard: {
+    backgroundColor: colors.background.card,
+    borderRadius: borderRadius.xl,
+    padding: 20,
+    ...shadows.small,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: colors.text.primary,
+    marginBottom: 16,
+  },
+  averageRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  averageInfo: {
+    flex: 1,
+  },
+  averageLabel: {
+    fontSize: 14,
+    color: colors.text.secondary,
+    marginBottom: 4,
+  },
+  averageValue: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: colors.primary.darkBlue,
+  },
+  averageBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: borderRadius.round,
+  },
+  averageBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.text.light,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.ui.border,
+    marginVertical: 16,
+  },
+});

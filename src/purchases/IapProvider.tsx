@@ -58,13 +58,7 @@ export function IapProvider(props: { children: React.ReactNode }) {
         const product_id = purchase.productId as ProductId;
         if (!Object.values(PRODUCTS).includes(product_id)) return;
 
-        if (Platform.OS === "ios") {
-          const receipt_base64 = await RNIap.getReceiptIOS();
-          const { error } = await supabase.functions.invoke("validate-purchase", {
-            body: { platform: "ios", product_id, receipt_base64 },
-          });
-          if (error) throw error;
-        } else {
+        if (Platform.OS === "android") {
           const p = purchase as RNIap.PurchaseAndroid;
           const purchase_token = p.purchaseToken ?? "";
           const package_name = p.packageNameAndroid ?? "";
@@ -77,8 +71,13 @@ export function IapProvider(props: { children: React.ReactNode }) {
 
         await RNIap.finishTransaction({ purchase, isConsumable: false });
 
-        const ent = await refreshEntitlement();
-        setPremiumUntil(ent.premiumUntil);
+        // NOTE (iOS): we intentionally do NOT call getReceiptIOS() here.
+        // It can throw "Request Canceled" on app startup / non-user-initiated flows.
+        // iOS entitlement is verified during explicit user actions (Buy/Restore).
+        if (Platform.OS === "android") {
+          const ent = await refreshEntitlement();
+          setPremiumUntil(ent.premiumUntil);
+        }
       } finally {
         validatingRef.current = false;
       }
@@ -98,7 +97,13 @@ export function IapProvider(props: { children: React.ReactNode }) {
 
   const restore = async () => {
     if (Platform.OS === "ios") {
-      const receipt_base64 = await RNIap.getReceiptIOS();
+      let receipt_base64 = "";
+      try {
+        receipt_base64 = await RNIap.getReceiptIOS();
+      } catch {
+        // User canceled / StoreKit unavailable – treat as no-op restore
+        return;
+      }
       for (const product_id of Object.values(PRODUCTS)) {
         const { error } = await supabase.functions.invoke("validate-purchase", {
           body: { platform: "ios", product_id, receipt_base64 },

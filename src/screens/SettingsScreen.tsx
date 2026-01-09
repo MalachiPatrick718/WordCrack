@@ -1,24 +1,36 @@
-import React, { useEffect, useState } from "react";
-import { Alert, Pressable, Switch, Text, View } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { Alert, Pressable, ScrollView, Switch, Text, TextInput, View, StyleSheet } from "react-native";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Notifications from "expo-notifications";
 import { getJson, setJson } from "../lib/storage";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../state/AuthProvider";
 import { useIap } from "../purchases/IapProvider";
 import { PRODUCTS } from "../purchases/products";
+import { colors, shadows, borderRadius } from "../theme/colors";
+import { disableDailyReminder, enableDailyReminder, getDailyReminderState } from "../lib/notifications";
+import { RootStackParamList } from "../AppRoot";
 
 type Prefs = {
   pushEnabled: boolean;
 };
 
-export function SettingsScreen() {
+type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
+
+export function SettingsScreen({ navigation }: Props) {
   const { user } = useAuth();
   const iap = useIap();
   const [prefs, setPrefs] = useState<Prefs>({ pushEnabled: false });
   const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [upgradeEmail, setUpgradeEmail] = useState("");
+  const [upgradeCode, setUpgradeCode] = useState("");
+  const [upgradeStep, setUpgradeStep] = useState<"idle" | "sent">("idle");
 
   useEffect(() => {
     getJson<Prefs>("wordcrack:prefs").then((v) => v && setPrefs(v));
+    getDailyReminderState().then((s) => {
+      setPrefs((p) => ({ ...p, pushEnabled: s.enabled }));
+    });
   }, []);
 
   useEffect(() => {
@@ -45,20 +57,37 @@ export function SettingsScreen() {
           return;
         }
       }
-      // v1: schedule local reminder placeholder; push scheduling via server comes later.
+      await enableDailyReminder();
+    } else {
+      await disableDailyReminder();
     }
     const updated = { ...prefs, pushEnabled: next };
     setPrefs(updated);
     await setJson("wordcrack:prefs", updated);
   };
 
+  const isAnonymous = Boolean((user as any)?.is_anonymous);
+  const entitlementLabel = useMemo(() => {
+    if (iap.loading) return "Checking…";
+    if (!iap.premium) return "Free";
+    return "Premium";
+  }, [iap.loading, iap.premium]);
+
   return (
-    <View style={{ flex: 1, padding: 16, gap: 14 }}>
-      <View style={{ borderWidth: 1, borderColor: "#eee", borderRadius: 16, padding: 14 }}>
-        <Text style={{ fontWeight: "900", marginBottom: 10 }}>Friends</Text>
-        <Text style={{ color: "#666", marginBottom: 10 }}>Share your invite code so friends can add you.</Text>
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <Text style={{ fontWeight: "800" }}>{inviteCode ?? "—"}</Text>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      {/* Friends Section */}
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardIcon}>👥</Text>
+          <Text style={styles.cardTitle}>Friends</Text>
+        </View>
+        <Text style={styles.cardDescription}>
+          Share your invite code so friends can add you.
+        </Text>
+        <View style={styles.inviteRow}>
+          <View style={styles.inviteCodeBox}>
+            <Text style={styles.inviteCode}>{inviteCode ?? "—"}</Text>
+          </View>
           <Pressable
             accessibilityRole="button"
             onPress={() => {
@@ -66,127 +95,327 @@ export function SettingsScreen() {
               void (async () => {
                 try {
                   const Share = require("react-native").Share;
-                  await Share.share({ message: `Add me on WordCrack: ${inviteCode}` });
+                  await Share.share({ message: `Add me on WordCrack! My code: ${inviteCode}` });
                 } catch {
                   Alert.alert("Share failed");
                 }
               })();
             }}
-            style={({ pressed }) => ({
-              borderWidth: 1,
-              borderColor: "#ddd",
-              borderRadius: 12,
-              paddingVertical: 10,
-              paddingHorizontal: 12,
-              opacity: pressed ? 0.9 : 1,
-            })}
+            style={({ pressed }) => [
+              styles.shareButton,
+              pressed && { opacity: 0.9 },
+            ]}
           >
-            <Text style={{ fontWeight: "800" }}>Share</Text>
+            <Text style={styles.shareButtonText}>Share</Text>
           </Pressable>
         </View>
       </View>
 
-      <View style={{ borderWidth: 1, borderColor: "#eee", borderRadius: 16, padding: 14 }}>
-        <Text style={{ fontWeight: "900", marginBottom: 10 }}>Notifications</Text>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Text>Daily reminder (push)</Text>
-          <Switch value={prefs.pushEnabled} onValueChange={togglePush} />
+      {/* Notifications Section */}
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardIcon}>🔔</Text>
+          <Text style={styles.cardTitle}>Notifications</Text>
         </View>
-        <Text style={{ color: "#666", marginTop: 10, fontSize: 12 }}>
-          v1 uses local scheduling; server push at your chosen local time will be enabled once OneSignal/Push server wiring is finalized.
+        <View style={styles.settingRow}>
+          <Text style={styles.settingLabel}>Daily reminder</Text>
+          <Switch
+            value={prefs.pushEnabled}
+            onValueChange={togglePush}
+            trackColor={{ false: colors.ui.border, true: colors.primary.blue }}
+            thumbColor={colors.background.card}
+          />
+        </View>
+        <Text style={styles.settingHint}>
+          Get notified when the daily puzzle is available.
         </Text>
       </View>
 
-      <View style={{ borderWidth: 1, borderColor: "#eee", borderRadius: 16, padding: 14 }}>
-        <Text style={{ fontWeight: "900", marginBottom: 10 }}>Account</Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => Alert.alert("Upgrade", "Guest → account upgrade flow will live here (email/password or OTP).")}
-          style={({ pressed }) => ({
-            borderWidth: 1,
-            borderColor: "#ddd",
-            borderRadius: 12,
-            padding: 12,
-            opacity: pressed ? 0.9 : 1,
-            alignItems: "center",
-          })}
-        >
-          <Text style={{ fontWeight: "800" }}>Upgrade Guest Account</Text>
-        </Pressable>
+      {/* Account Section */}
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardIcon}>👤</Text>
+          <Text style={styles.cardTitle}>Account</Text>
+        </View>
+        {isAnonymous ? (
+          <>
+            <Text style={styles.cardDescription}>
+              You’re playing as a guest. Upgrade to keep your progress across devices.
+            </Text>
+            <View style={{ gap: 10 }}>
+              <TextInput
+                placeholder="Email address"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                value={upgradeEmail}
+                onChangeText={setUpgradeEmail}
+                style={styles.input}
+              />
+              {upgradeStep === "sent" ? (
+                <TextInput
+                  placeholder="OTP code"
+                  keyboardType="number-pad"
+                  value={upgradeCode}
+                  onChangeText={setUpgradeCode}
+                  style={styles.input}
+                />
+              ) : null}
+              <Pressable
+                accessibilityRole="button"
+                onPress={async () => {
+                  try {
+                    const email = upgradeEmail.trim();
+                    if (!email) return;
+                    if (upgradeStep === "idle") {
+                      // Best-effort upgrade: attach email then send OTP.
+                      await supabase.auth.updateUser({ email });
+                      const { error } = await supabase.auth.signInWithOtp({ email });
+                      if (error) throw error;
+                      setUpgradeStep("sent");
+                      Alert.alert("Check your email", "Enter the code to complete account upgrade.");
+                    } else {
+                      const { error } = await supabase.auth.verifyOtp({ email, token: upgradeCode.trim(), type: "email" });
+                      if (error) throw error;
+                      setUpgradeStep("idle");
+                      setUpgradeCode("");
+                      Alert.alert("Upgraded!", "Your guest account is now linked to your email.");
+                    }
+                  } catch (e: any) {
+                    Alert.alert("Upgrade failed", e?.message ?? "Unknown error");
+                  }
+                }}
+                style={({ pressed }) => [styles.actionButton, pressed && { opacity: 0.9 }]}
+              >
+                <Text style={styles.actionButtonText}>
+                  {upgradeStep === "idle" ? "Send Upgrade Code" : "Verify & Upgrade"}
+                </Text>
+              </Pressable>
+            </View>
+          </>
+        ) : (
+          <Text style={styles.cardDescription}>Signed in.</Text>
+        )}
       </View>
 
-      <View style={{ borderWidth: 1, borderColor: "#eee", borderRadius: 16, padding: 14 }}>
-        <Text style={{ fontWeight: "900", marginBottom: 10 }}>Purchases</Text>
-        <Text style={{ color: "#666", marginBottom: 10, fontSize: 12 }}>
-          Purchases are handled directly via Apple/Google (no RevenueCat). Your entitlement is stored in Supabase after server-side validation.
+      {/* Premium Section */}
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardIcon}>⭐</Text>
+          <Text style={styles.cardTitle}>Premium</Text>
+        </View>
+        <Text style={{ color: colors.text.secondary, marginBottom: 8 }}>Status: {entitlementLabel}</Text>
+        <Text style={styles.cardDescription}>
+          Unlock unlimited practice puzzles, advanced stats, and more!
         </Text>
-        <View style={{ flexDirection: "row", gap: 10 }}>
+        <View style={styles.premiumButtons}>
           <Pressable
             accessibilityRole="button"
             onPress={async () => {
               try {
+                // v1: default to monthly. Add annual/lifetime selection next.
                 await iap.buy(PRODUCTS.premium_monthly);
-                Alert.alert("Success", "Premium unlocked (if your purchase validated).");
+                Alert.alert("Success", "Premium unlocked!");
               } catch (e: any) {
                 Alert.alert("Purchase failed", e?.message ?? "Unknown error");
               }
             }}
-            style={({ pressed }) => ({
-              flex: 1,
-              backgroundColor: "#6C5CE7",
-              borderRadius: 12,
-              padding: 12,
-              opacity: pressed ? 0.9 : 1,
-              alignItems: "center",
-            })}
+            style={({ pressed }) => [
+              styles.premiumButton,
+              pressed && { opacity: 0.9 },
+            ]}
           >
-            <Text style={{ color: "white", fontWeight: "800" }}>Go Premium</Text>
+            <Text style={styles.premiumButtonText}>Go Premium</Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
             onPress={async () => {
               try {
                 await iap.restore();
-                Alert.alert("Restored", "We synced your purchases and updated your entitlement.");
+                Alert.alert("Restored", "Your purchases have been synced.");
               } catch (e: any) {
                 Alert.alert("Restore failed", e?.message ?? "Unknown error");
               }
             }}
-            style={({ pressed }) => ({
-              flex: 1,
-              borderWidth: 1,
-              borderColor: "#ddd",
-              borderRadius: 12,
-              padding: 12,
-              opacity: pressed ? 0.9 : 1,
-              alignItems: "center",
-            })}
+            style={({ pressed }) => [
+              styles.restoreButton,
+              pressed && { opacity: 0.9 },
+            ]}
           >
-            <Text style={{ fontWeight: "800" }}>Restore</Text>
+            <Text style={styles.restoreButtonText}>Restore Purchases</Text>
           </Pressable>
         </View>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => Alert.alert("Products", "Configure your monthly/annual/lifetime products in App Store Connect and Play Console to match the IDs in src/purchases/products.ts")}
-          style={({ pressed }) => ({
-            borderWidth: 1,
-            borderColor: "#ddd",
-            borderRadius: 12,
-            padding: 12,
-            opacity: pressed ? 0.9 : 1,
-            alignItems: "center",
-          })}
-        >
-          <Text style={{ fontWeight: "800" }}>IAP Setup Info</Text>
-        </Pressable>
       </View>
 
-      <View style={{ borderWidth: 1, borderColor: "#eee", borderRadius: 16, padding: 14 }}>
-        <Text style={{ fontWeight: "900", marginBottom: 10 }}>Legal</Text>
-        <Text style={{ color: "#666", fontSize: 12 }}>Privacy Policy & Terms screens will be included before release.</Text>
+      {/* Legal Section */}
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardIcon}>📄</Text>
+          <Text style={styles.cardTitle}>Legal</Text>
+        </View>
+        <View style={styles.legalLinks}>
+          <Pressable
+            style={styles.legalLink}
+            onPress={() => navigation.navigate("Legal", { doc: "privacy" })}
+          >
+            <Text style={styles.legalLinkText}>Privacy Policy</Text>
+          </Pressable>
+          <Pressable
+            style={styles.legalLink}
+            onPress={() => navigation.navigate("Legal", { doc: "terms" })}
+          >
+            <Text style={styles.legalLinkText}>Terms of Service</Text>
+          </Pressable>
+        </View>
       </View>
-    </View>
+
+      <Text style={styles.version}>WordCrack v1.0.0</Text>
+    </ScrollView>
   );
 }
 
-
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background.main,
+  },
+  content: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+  card: {
+    backgroundColor: colors.background.card,
+    borderRadius: borderRadius.xl,
+    padding: 20,
+    marginBottom: 16,
+    ...shadows.small,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  cardIcon: {
+    fontSize: 24,
+    marginRight: 10,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: colors.text.primary,
+  },
+  cardDescription: {
+    color: colors.text.secondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  inviteRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  inviteCodeBox: {
+    flex: 1,
+    backgroundColor: colors.background.main,
+    borderRadius: borderRadius.medium,
+    padding: 14,
+    alignItems: "center",
+  },
+  inviteCode: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: colors.primary.darkBlue,
+    letterSpacing: 2,
+  },
+  shareButton: {
+    backgroundColor: colors.primary.blue,
+    borderRadius: borderRadius.medium,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    ...shadows.small,
+  },
+  shareButtonText: {
+    color: colors.text.light,
+    fontWeight: "700",
+    fontSize: 15,
+  },
+  settingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  settingLabel: {
+    fontSize: 16,
+    color: colors.text.primary,
+  },
+  settingHint: {
+    color: colors.text.muted,
+    fontSize: 12,
+  },
+  actionButton: {
+    backgroundColor: colors.background.main,
+    borderRadius: borderRadius.medium,
+    padding: 14,
+    alignItems: "center",
+  },
+  actionButtonText: {
+    color: colors.primary.blue,
+    fontWeight: "700",
+    fontSize: 15,
+  },
+  input: {
+    backgroundColor: colors.background.main,
+    borderRadius: borderRadius.medium,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: colors.ui.border,
+    color: colors.text.primary,
+  },
+  premiumButtons: {
+    gap: 10,
+  },
+  premiumButton: {
+    backgroundColor: colors.primary.yellow,
+    borderRadius: borderRadius.medium,
+    padding: 16,
+    alignItems: "center",
+    ...shadows.small,
+  },
+  premiumButtonText: {
+    color: colors.primary.darkBlue,
+    fontWeight: "800",
+    fontSize: 16,
+  },
+  restoreButton: {
+    backgroundColor: colors.background.main,
+    borderRadius: borderRadius.medium,
+    padding: 14,
+    alignItems: "center",
+  },
+  restoreButtonText: {
+    color: colors.text.secondary,
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  legalLinks: {
+    gap: 8,
+  },
+  legalLink: {
+    padding: 12,
+    backgroundColor: colors.background.main,
+    borderRadius: borderRadius.medium,
+  },
+  legalLinkText: {
+    color: colors.primary.blue,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  version: {
+    textAlign: "center",
+    color: colors.text.muted,
+    fontSize: 12,
+    marginTop: 8,
+  },
+});

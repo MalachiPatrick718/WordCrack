@@ -13,6 +13,23 @@ export function computeShiftedPositions(cipherWord: string, targetWord: string):
   return Array.from({ length: 6 }, (_, i) => cipherWord[i] !== targetWord[i]);
 }
 
+function charToN(c: string): number {
+  const code = c.charCodeAt(0);
+  return code - 65;
+}
+
+function shiftAmount(cipherWord: string, targetWord: string): number | null {
+  const shifted = computeShiftedPositions(cipherWord, targetWord);
+  const idx = shifted.findIndex((v) => v);
+  if (idx < 0) return null;
+  const t = charToN(targetWord[idx]);
+  const c = charToN(cipherWord[idx]);
+  const diff = (c - t + 26) % 26;
+  if (diff === 0) return null;
+  // Do NOT reveal direction; return magnitude only.
+  return Math.min(diff, 26 - diff);
+}
+
 function pickRandom<T>(arr: T[], count: number): T[] {
   if (count <= 0) return [];
   if (arr.length <= count) return [...arr];
@@ -35,6 +52,7 @@ export function buildHintMessage(args: {
   themeHint: string | null;
 }): { message: string; meta?: Record<string, unknown> } {
   const shifted = computeShiftedPositions(args.cipherWord, args.targetWord);
+  const amount = shiftAmount(args.cipherWord, args.targetWord);
   const shiftedIdx = shifted
     .map((v, i) => ({ v, i }))
     .filter((x) => x.v)
@@ -46,7 +64,8 @@ export function buildHintMessage(args: {
 
   if (args.hintType === "shift_count") {
     const count = shiftedIdx.length;
-    return { message: `${count} of the 6 letters are shifted.`, meta: { shiftedCount: count } };
+    const extra = amount != null ? ` Shift amount: ${amount}.` : "";
+    return { message: `${count} of the 6 letters are shifted.${extra}`, meta: { shiftedCount: count, shiftAmount: amount } };
   }
 
   if (args.hintType === "shift_position") {

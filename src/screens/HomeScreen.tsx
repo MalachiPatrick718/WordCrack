@@ -1,8 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Image, Pressable, Text, View, StyleSheet } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "../AppRoot";
 import { useAuth } from "../state/AuthProvider";
+import { colors, shadows, borderRadius } from "../theme/colors";
+import { getTodayPuzzle } from "../lib/api";
+import { supabase } from "../lib/supabase";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
@@ -22,104 +26,281 @@ function formatHms(ms: number): string {
 export function HomeScreen({ navigation }: Props) {
   const { signOut } = useAuth();
   const [tick, setTick] = useState(0);
+  const [solvedToday, setSolvedToday] = useState<boolean>(false);
 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
   }, []);
 
-  const today = useMemo(() => new Date().toDateString(), [tick]);
+  const refreshSolvedState = async () => {
+    const puzzle = await getTodayPuzzle();
+    const { data, error } = await supabase
+      .from("attempts")
+      .select("id")
+      .eq("puzzle_id", puzzle.id)
+      .eq("mode", "daily")
+      .eq("is_completed", true)
+      .limit(1);
+    if (error) return;
+    setSolvedToday((data?.length ?? 0) > 0);
+  };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        try {
+          await refreshSolvedState();
+        } catch {
+          // ignore
+        }
+      })();
+      const id = setInterval(() => {
+        if (cancelled) return;
+        void refreshSolvedState();
+      }, 60_000);
+      return () => {
+        cancelled = true;
+        clearInterval(id);
+      };
+    }, [])
+  );
+
+  const today = useMemo(() => {
+    const d = new Date();
+    return d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+  }, [tick]);
   const countdown = useMemo(() => formatHms(msUntilNextUtcDay()), [tick]);
 
   return (
-    <View style={{ flex: 1, padding: 16, gap: 12 }}>
-      <View style={{ backgroundColor: "#0B1020", borderRadius: 16, padding: 16 }}>
-        <Text style={{ color: "rgba(255,255,255,0.8)" }}>Today</Text>
-        <Text style={{ color: "white", fontSize: 20, fontWeight: "800", marginTop: 6 }}>{today}</Text>
-        <Text style={{ color: "rgba(255,255,255,0.8)", marginTop: 10 }}>Next puzzle in</Text>
-        <Text style={{ color: "white", fontSize: 20, fontWeight: "700", marginTop: 4 }}>{countdown}</Text>
+    <View style={styles.container}>
+      {/* Logo */}
+      <Image
+        source={require("../../assets/icon.png")}
+        style={styles.logo}
+        resizeMode="contain"
+      />
+
+      {/* Today's Card */}
+      <View style={styles.todayCard}>
+        <View style={styles.todayHeader}>
+          <Text style={styles.todayLabel}>Today's Puzzle</Text>
+          <View style={styles.dateBadge}>
+            <Text style={styles.dateText}>{today}</Text>
+          </View>
+        </View>
+
+        <View style={styles.countdownContainer}>
+          <Text style={styles.countdownLabel}>Next puzzle in</Text>
+          <Text style={styles.countdown}>{countdown}</Text>
+        </View>
       </View>
 
+      {/* Play Button */}
       <Pressable
         accessibilityRole="button"
+        disabled={solvedToday}
         onPress={() => navigation.navigate("Puzzle", { mode: "daily" })}
-        style={({ pressed }) => ({
-          backgroundColor: "#6C5CE7",
-          borderRadius: 14,
-          padding: 16,
-          opacity: pressed ? 0.9 : 1,
-          alignItems: "center",
-        })}
+        style={({ pressed }) => [
+          styles.playButton,
+          solvedToday && styles.playButtonDisabled,
+          pressed && styles.playButtonPressed,
+        ]}
       >
-        <Text style={{ color: "white", fontWeight: "800" }}>Play Today</Text>
+        <Text style={styles.playButtonText}>{solvedToday ? "Solved Today's Puzzle" : "Solve Today's Puzzle"}</Text>
+        <Text style={styles.playButtonSubtext}>
+          {solvedToday ? "Come back for the next puzzle." : "Solve the daily cipher!"}
+        </Text>
       </Pressable>
 
-      <View style={{ flexDirection: "row", gap: 12 }}>
+      {/* Quick Actions */}
+      <View style={styles.quickActions}>
         <Pressable
           accessibilityRole="button"
           onPress={() => navigation.navigate("Leaderboards")}
-          style={({ pressed }) => ({
-            flex: 1,
-            borderWidth: 1,
-            borderColor: "#ddd",
-            borderRadius: 14,
-            padding: 14,
-            opacity: pressed ? 0.9 : 1,
-            alignItems: "center",
-          })}
+          style={({ pressed }) => [
+            styles.quickButton,
+            { backgroundColor: colors.tiles[0] },
+            pressed && { opacity: 0.9 },
+          ]}
         >
-          <Text style={{ fontWeight: "800" }}>Leaderboard</Text>
+          <Text style={styles.quickButtonIcon}>🏆</Text>
+          <Text style={styles.quickButtonText}>Leaderboard</Text>
         </Pressable>
+
         <Pressable
           accessibilityRole="button"
           onPress={() => navigation.navigate("Stats")}
-          style={({ pressed }) => ({
-            flex: 1,
-            borderWidth: 1,
-            borderColor: "#ddd",
-            borderRadius: 14,
-            padding: 14,
-            opacity: pressed ? 0.9 : 1,
-            alignItems: "center",
-          })}
+          style={({ pressed }) => [
+            styles.quickButton,
+            { backgroundColor: colors.tiles[1] },
+            pressed && { opacity: 0.9 },
+          ]}
         >
-          <Text style={{ fontWeight: "800" }}>Stats</Text>
+          <Text style={styles.quickButtonIcon}>📊</Text>
+          <Text style={styles.quickButtonText}>Stats</Text>
         </Pressable>
       </View>
 
+      {/* Settings */}
       <Pressable
         accessibilityRole="button"
         onPress={() => navigation.navigate("Settings")}
-        style={({ pressed }) => ({
-          borderWidth: 1,
-          borderColor: "#ddd",
-          borderRadius: 14,
-          padding: 14,
-          opacity: pressed ? 0.9 : 1,
-          alignItems: "center",
-        })}
+        style={({ pressed }) => [
+          styles.settingsButton,
+          pressed && { opacity: 0.9 },
+        ]}
       >
-        <Text style={{ fontWeight: "800" }}>Settings</Text>
+        <Text style={styles.settingsIcon}>⚙️</Text>
+        <Text style={styles.settingsText}>Settings</Text>
       </Pressable>
 
       <View style={{ flex: 1 }} />
 
+      {/* Sign Out */}
       <Pressable
         accessibilityRole="button"
         onPress={() => signOut()}
-        style={({ pressed }) => ({
-          borderWidth: 1,
-          borderColor: "#eee",
-          borderRadius: 14,
-          padding: 14,
-          opacity: pressed ? 0.9 : 1,
-          alignItems: "center",
-        })}
+        style={({ pressed }) => [
+          styles.signOutButton,
+          pressed && { opacity: 0.8 },
+        ]}
       >
-        <Text style={{ fontWeight: "700" }}>Sign Out</Text>
+        <Text style={styles.signOutText}>Sign Out</Text>
       </Pressable>
     </View>
   );
 }
 
-
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background.main,
+    padding: 20,
+  },
+  logo: {
+    width: 160,
+    height: 100,
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  todayCard: {
+    backgroundColor: colors.background.card,
+    borderRadius: borderRadius.xl,
+    padding: 20,
+    ...shadows.medium,
+  },
+  todayHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  todayLabel: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: colors.text.primary,
+  },
+  dateBadge: {
+    backgroundColor: colors.primary.yellow,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: borderRadius.round,
+  },
+  dateText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.primary.darkBlue,
+  },
+  countdownContainer: {
+    backgroundColor: colors.primary.darkBlue,
+    borderRadius: borderRadius.large,
+    padding: 16,
+    alignItems: "center",
+  },
+  countdownLabel: {
+    fontSize: 14,
+    color: colors.primary.lightBlue,
+    marginBottom: 4,
+  },
+  countdown: {
+    fontSize: 32,
+    fontWeight: "800",
+    color: colors.text.light,
+    fontVariant: ["tabular-nums"],
+  },
+  playButton: {
+    backgroundColor: colors.primary.blue,
+    borderRadius: borderRadius.xl,
+    padding: 20,
+    alignItems: "center",
+    marginTop: 16,
+    ...shadows.medium,
+  },
+  playButtonPressed: {
+    backgroundColor: colors.button.primaryPressed,
+  },
+  playButtonDisabled: {
+    backgroundColor: colors.text.muted,
+  },
+  playButtonText: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: colors.text.light,
+  },
+  playButtonSubtext: {
+    fontSize: 14,
+    color: colors.primary.lightBlue,
+    marginTop: 4,
+  },
+  quickActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 16,
+  },
+  quickButton: {
+    flex: 1,
+    borderRadius: borderRadius.large,
+    padding: 16,
+    alignItems: "center",
+    ...shadows.small,
+  },
+  quickButtonIcon: {
+    fontSize: 28,
+    marginBottom: 6,
+  },
+  quickButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.text.light,
+  },
+  settingsButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.background.card,
+    borderRadius: borderRadius.large,
+    padding: 14,
+    marginTop: 12,
+    ...shadows.small,
+  },
+  settingsIcon: {
+    fontSize: 20,
+    marginRight: 8,
+  },
+  settingsText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.text.primary,
+  },
+  signOutButton: {
+    alignItems: "center",
+    padding: 14,
+  },
+  signOutText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.text.secondary,
+  },
+});
