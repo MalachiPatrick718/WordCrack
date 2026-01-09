@@ -194,7 +194,90 @@ In **Resend Dashboard**:
 
 If you don’t have a domain verified yet, temporarily set the Sender email to a Resend-provided address (e.g. `onboarding@resend.dev`) to confirm the OTP flow works, then switch to your domain later.
 
+## 7.2) Make Email OTP send a 6‑digit code (not a link)
+
+In Supabase, `signInWithOtp()` **sends a Magic Link by default** unless your email templates include the OTP token.
+
+To make your emails contain a **6‑digit code** (so it matches the app UI):
+
+In **Supabase Dashboard**:
+- Authentication → **Email Templates**
+- Update these templates to use `{{ .Token }}` instead of `{{ .ConfirmationURL }}`:
+
+**Magic Link** template (for returning users):
+
+```html
+<h2>WordCrack login code</h2>
+<p>Enter this code in the app:</p>
+<p style="font-size: 24px; font-weight: 800; letter-spacing: 2px;">{{ .Token }}</p>
+```
+
+**Confirm Signup** template (for first-time signups / email confirmation):
+
+```html
+<h2>Confirm your WordCrack email</h2>
+<p>Enter this code in the app to finish signing in:</p>
+<p style="font-size: 24px; font-weight: 800; letter-spacing: 2px;">{{ .Token }}</p>
+```
+
+After this, when you tap **Send OTP**, the email will contain the 6‑digit code and you can complete sign-in using `verifyOtp({ email, token, type: "email" })` (which the app already does).
+
+### Optional: make the emails look nicer (subject + emojis)
+
+In **Supabase Dashboard → Authentication → Email Templates**, you can edit the **Subject** and **Body**.
+
+Here’s a ready-to-paste **Confirm Signup** template (uses the 6‑digit OTP and includes the 🧩 emoji):
+
+- **Subject**:
+  - `🧩 WordCrack — Confirm your email`
+
+- **Body (HTML)**:
+
+```html
+<div style="font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color: #0f172a;">
+  <h2 style="margin: 0 0 8px 0;">🧩 Welcome to WordCrack!</h2>
+  <p style="margin: 0 0 16px 0; color: #334155;">
+    Enter this code in the app to confirm your email and start cracking today's puzzle.
+  </p>
+
+  <div
+    style="
+      display: inline-block;
+      background: #0b2a4a;
+      color: #ffffff;
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: 4px;
+    "
+  >
+    {{ .Token }}
+  </div>
+
+  <p style="margin: 16px 0 0 0; color: #64748b; font-size: 12px;">
+    This code expires soon. If you didn’t request it, you can ignore this email.
+  </p>
+</div>
+```
+
+Tip: you can also update the **Magic Link** template to the same style + subject (for returning users who request a code).
+
 ## 8) Testing (Backend + App)
+
+## Note about `supabase/migrations/0000_fix_all.sql`
+
+If `supabase db push` tells you:
+> Found local migration files to be inserted before the last migration on remote database
+
+and lists `0000_fix_all.sql`, that file is a **manual “fix-all” script**, not a true migration.
+
+To apply migrations to your hosted Supabase project, use the ordered migrations (`0001_...`, `0002_...`, etc).
+If you keep `0000_fix_all.sql` in the migrations folder, you’ll need to run:
+- `supabase db push --include-all`
+
+Otherwise, remove/move that file out of the migrations folder and run:
+- `supabase db push`
 
 ## 8.1) Build & run on real devices (iPhone + Android)
 

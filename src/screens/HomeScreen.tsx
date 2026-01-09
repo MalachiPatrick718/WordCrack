@@ -24,7 +24,6 @@ function formatHms(ms: number): string {
 }
 
 export function HomeScreen({ navigation }: Props) {
-  const { signOut } = useAuth();
   const [tick, setTick] = useState(0);
   const [solvedToday, setSolvedToday] = useState<boolean>(false);
 
@@ -155,20 +154,7 @@ export function HomeScreen({ navigation }: Props) {
         <Text style={styles.settingsIcon}>⚙️</Text>
         <Text style={styles.settingsText}>Settings</Text>
       </Pressable>
-
       <View style={{ flex: 1 }} />
-
-      {/* Sign Out */}
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => signOut()}
-        style={({ pressed }) => [
-          styles.signOutButton,
-          pressed && { opacity: 0.8 },
-        ]}
-      >
-        <Text style={styles.signOutText}>Sign Out</Text>
-      </Pressable>
     </View>
   );
 }
@@ -293,14 +279,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: colors.text.primary,
-  },
-  signOutButton: {
-    alignItems: "center",
-    padding: 14,
-  },
-  signOutText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.text.secondary,
   },
 });

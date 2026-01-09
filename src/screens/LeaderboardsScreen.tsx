@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { Alert, Image, Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
 import { addFriendByInviteCode, getDailyLeaderboard, getFriendsLeaderboard, type LeaderboardEntry } from "../lib/api";
 import { useAuth } from "../state/AuthProvider";
 import { colors, shadows, borderRadius } from "../theme/colors";
@@ -24,23 +24,39 @@ function getRankColor(rank: number): string {
 export function LeaderboardsScreen() {
   const { user } = useAuth();
   const [tab, setTab] = useState<Tab>("daily");
-  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [dailyEntries, setDailyEntries] = useState<LeaderboardEntry[] | null>(null);
+  const [friendsEntries, setFriendsEntries] = useState<LeaderboardEntry[] | null>(null);
+  const [loading, setLoading] = useState<null | Tab>(null);
   const [inviteCode, setInviteCode] = useState("");
+
+  const isAnonymous = Boolean((user as any)?.is_anonymous) || (user as any)?.app_metadata?.provider === "anonymous";
+
+  const activeEntries = useMemo(() => {
+    return tab === "daily" ? dailyEntries : friendsEntries;
+  }, [tab, dailyEntries, friendsEntries]);
 
   const load = async (t: Tab) => {
     try {
-      setLoading(true);
+      setLoading(t);
+      // Prevent the "global list flashes in friends tab" effect.
+      if (t === "daily") setDailyEntries(null);
+      if (t === "friends") setFriendsEntries(null);
       const data = t === "daily" ? await getDailyLeaderboard() : await getFriendsLeaderboard();
-      setEntries(data);
+      if (t === "daily") setDailyEntries(data);
+      if (t === "friends") setFriendsEntries(data);
     } catch (e: any) {
       Alert.alert("Failed to load", e?.message ?? "Unknown error");
     } finally {
-      setLoading(false);
+      setLoading(null);
     }
   };
 
   useEffect(() => {
+    // Guests can see global leaderboard, but friends requires a real account.
+    if (tab === "friends" && isAnonymous) {
+      setTab("daily");
+      return;
+    }
     void load(tab);
   }, [tab]);
 
@@ -60,23 +76,29 @@ export function LeaderboardsScreen() {
             🌍 Global
           </Text>
         </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => setTab("friends")}
-          style={[
-            styles.tab,
-            tab === "friends" ? styles.tabActive : styles.tabInactive,
-          ]}
-        >
-          <Text style={[styles.tabText, tab === "friends" && styles.tabTextActive]}>
-            👥 Friends
-          </Text>
-        </Pressable>
+        {!isAnonymous ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setTab("friends")}
+            style={[
+              styles.tab,
+              tab === "friends" ? styles.tabActive : styles.tabInactive,
+            ]}
+          >
+            <Text style={[styles.tabText, tab === "friends" && styles.tabTextActive]}>
+              👥 Friends
+            </Text>
+          </Pressable>
+        ) : (
+          <View style={[styles.tab, styles.tabInactive, { opacity: 0.5 }]}>
+            <Text style={styles.tabText}>👥 Friends</Text>
+          </View>
+        )}
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Add Friend Section */}
-        {tab === "friends" && (
+        {tab === "friends" && !isAnonymous && (
           <View style={styles.addFriendCard}>
             <Text style={styles.cardTitle}>Add a Friend</Text>
             <TextInput
@@ -112,14 +134,14 @@ export function LeaderboardsScreen() {
         )}
 
         {/* Loading State */}
-        {loading && (
+        {loading === tab && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyText}>Loading...</Text>
           </View>
         )}
 
         {/* Empty State */}
-        {entries.length === 0 && !loading && (
+        {(activeEntries?.length ?? 0) === 0 && loading !== tab && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyEmoji}>{tab === "daily" ? "🏆" : "👥"}</Text>
             <Text style={styles.emptyTitle}>No entries yet</Text>
@@ -132,26 +154,38 @@ export function LeaderboardsScreen() {
         )}
 
         {/* Leaderboard Entries */}
-        {entries.map((e, i) => (
+        {(activeEntries ?? []).map((e, i) => (
           <View
             key={`${e.user_id}:${i}`}
             style={[
               styles.entryCard,
               i < 3 && { borderLeftWidth: 4, borderLeftColor: getRankColor(i + 1) },
+              user?.id === e.user_id && styles.entryCardMe,
             ]}
           >
-            <View style={styles.rankBadgeStack}>
-              <View style={[styles.rankBadge, { backgroundColor: getRankColor(i + 1) }]}>
-                <Text style={styles.rankText}>#{i + 1}</Text>
-              </View>
-              {Boolean((user as any)?.is_anonymous) && user?.id === e.user_id ? (
-                <View style={styles.mePill}>
-                  <Text style={styles.mePillText}>Me</Text>
-                </View>
-              ) : null}
+            <View style={[styles.rankBadge, { backgroundColor: getRankColor(i + 1) }]}>
+              <Text style={styles.rankText}>#{i + 1}</Text>
             </View>
             <View style={styles.entryInfo}>
-              <Text style={styles.username}>{e.username}</Text>
+              <View style={styles.userRow}>
+                {e.avatar_url ? (
+                  <Image source={{ uri: e.avatar_url }} style={styles.avatar} />
+                ) : (
+                  <View style={styles.avatarFallback}>
+                    <Text style={styles.avatarFallbackText}>{String(e.username ?? "P").slice(0, 1).toUpperCase()}</Text>
+                  </View>
+                )}
+                <View style={styles.usernameRow}>
+                  <Text style={styles.username} numberOfLines={1}>
+                    {e.username}
+                  </Text>
+                  {user?.id === e.user_id ? (
+                    <View style={styles.mePillInline}>
+                      <Text style={styles.mePillInlineText}>Me</Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
               <Text style={styles.entryDetails}>
                 💡 {e.hints_used_count} hints • ⏱️ +{Math.floor(e.penalty_ms / 1000)}s
               </Text>
@@ -262,9 +296,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     ...shadows.small,
   },
-  rankBadgeStack: {
-    position: "relative",
-    marginRight: 12,
+  entryCardMe: {
+    borderWidth: 1,
+    borderColor: "rgba(26, 115, 232, 0.35)",
   },
   rankBadge: {
     width: 36,
@@ -272,31 +306,56 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
+    marginRight: 12,
   },
   rankText: {
     fontWeight: "800",
     fontSize: 14,
     color: colors.primary.darkBlue,
   },
-  mePill: {
-    position: "absolute",
-    right: -8,
-    bottom: -8,
+  entryInfo: {
+    flex: 1,
+  },
+  userRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  usernameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexShrink: 1,
+  },
+  mePillInline: {
     backgroundColor: colors.primary.darkBlue,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 999,
-    borderWidth: 2,
-    borderColor: colors.background.card,
   },
-  mePillText: {
+  mePillInlineText: {
     color: colors.text.light,
     fontWeight: "900",
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 0.2,
   },
-  entryInfo: {
-    flex: 1,
+  avatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.background.main,
+  },
+  avatarFallback: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.primary.darkBlue,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarFallbackText: {
+    color: colors.text.light,
+    fontWeight: "900",
   },
   username: {
     fontWeight: "700",

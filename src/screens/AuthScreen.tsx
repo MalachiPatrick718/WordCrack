@@ -1,7 +1,9 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View, StyleSheet } from "react-native";
 import { useAuth } from "../state/AuthProvider";
 import { colors, shadows, borderRadius } from "../theme/colors";
+
+const RESEND_COOLDOWN_MS = 30_000;
 
 export function AuthScreen() {
   const { signInGuest, signInWithEmailOtp, verifyEmailOtp } = useAuth();
@@ -9,12 +11,29 @@ export function AuthScreen() {
   const [otpSent, setOtpSent] = useState(false);
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
+  const [resendReadyAt, setResendReadyAt] = useState<number>(0);
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    if (!otpSent) return;
+    const id = setInterval(() => setTick((t) => t + 1), 250);
+    return () => clearInterval(id);
+  }, [otpSent]);
+
+  const resendRemainingMs = useMemo(() => Math.max(0, resendReadyAt - Date.now()), [resendReadyAt, tick]);
+  const canResend = otpSent && !busy && resendRemainingMs <= 0 && email.trim().length >= 3;
+  const resendLabel = useMemo(() => {
+    if (resendRemainingMs <= 0) return "Resend code";
+    const s = Math.ceil(resendRemainingMs / 1000);
+    return `Resend code (${s}s)`;
+  }, [resendRemainingMs]);
 
   const sendOtp = async () => {
     try {
       setBusy(true);
       await signInWithEmailOtp(email.trim());
       setOtpSent(true);
+      setResendReadyAt(Date.now() + RESEND_COOLDOWN_MS);
       Alert.alert("Check your email", "Enter the 6-digit code to sign in.");
     } catch (e: any) {
       const details = [e?.message, e?.status ? `status: ${e.status}` : null, e?.code ? `code: ${e.code}` : null]
@@ -92,6 +111,29 @@ export function AuthScreen() {
                 onChangeText={setToken}
                 style={styles.input}
               />
+              <Pressable
+                accessibilityRole="button"
+                disabled={!canResend}
+                onPress={async () => {
+                  try {
+                    setBusy(true);
+                    await signInWithEmailOtp(email.trim());
+                    setResendReadyAt(Date.now() + RESEND_COOLDOWN_MS);
+                    Alert.alert("Code resent", "Check your email for a new 6-digit code.");
+                  } catch (e: any) {
+                    Alert.alert("Resend failed", e?.message ?? "Unknown error");
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+                style={({ pressed }) => [
+                  styles.resendButton,
+                  !canResend && styles.resendButtonDisabled,
+                  pressed && canResend && { opacity: 0.9 },
+                ]}
+              >
+                <Text style={[styles.resendText, !canResend && styles.resendTextDisabled]}>{resendLabel}</Text>
+              </Pressable>
             </View>
           )}
 
@@ -185,6 +227,24 @@ const styles = StyleSheet.create({
   },
   inputGroup: {
     gap: 6,
+  },
+  resendButton: {
+    alignSelf: "flex-start",
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: borderRadius.medium,
+    marginTop: 6,
+  },
+  resendButtonDisabled: {
+    opacity: 1,
+  },
+  resendText: {
+    color: colors.primary.blue,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  resendTextDisabled: {
+    color: colors.text.muted,
   },
   label: {
     fontSize: 14,

@@ -1,5 +1,11 @@
--- COMPREHENSIVE FIX: Run this in Supabase SQL Editor to ensure all objects exist
--- This script is idempotent (safe to run multiple times)
+-- NOTE:
+-- This file is intentionally NOT used as an ordered migration for hosted Supabase projects.
+-- It is a "fix-all" script meant to be run manually in the SQL editor.
+--
+-- Having it inside `supabase/migrations/` can block `supabase db push` because it sorts
+-- before your real migrations. Keep it for reference, but do not apply it via db push.
+--
+-- If you need it, copy/paste into Supabase SQL Editor and run manually.
 
 -- ============================================
 -- 1. EXTENSIONS

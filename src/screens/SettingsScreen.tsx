@@ -18,7 +18,7 @@ type Prefs = {
 type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
 
 export function SettingsScreen({ navigation }: Props) {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const iap = useIap();
   const [prefs, setPrefs] = useState<Prefs>({ pushEnabled: false });
   const [inviteCode, setInviteCode] = useState<string | null>(null);
@@ -70,46 +70,71 @@ export function SettingsScreen({ navigation }: Props) {
   const entitlementLabel = useMemo(() => {
     if (iap.loading) return "Checking…";
     if (!iap.premium) return "Free";
-    return "Premium";
+    return "WordCrack Premium";
   }, [iap.loading, iap.premium]);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Friends Section */}
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardIcon}>👥</Text>
-          <Text style={styles.cardTitle}>Friends</Text>
-        </View>
-        <Text style={styles.cardDescription}>
-          Share your invite code so friends can add you.
-        </Text>
-        <View style={styles.inviteRow}>
-          <View style={styles.inviteCodeBox}>
-            <Text style={styles.inviteCode}>{inviteCode ?? "—"}</Text>
+      {/* Profile Section */}
+      {!isAnonymous ? (
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardIcon}>🪪</Text>
+            <Text style={styles.cardTitle}>Profile</Text>
           </View>
+          <Text style={styles.cardDescription}>
+            Set your username and profile picture for leaderboards.
+          </Text>
           <Pressable
             accessibilityRole="button"
-            onPress={() => {
-              if (!inviteCode) return;
-              void (async () => {
-                try {
-                  const Share = require("react-native").Share;
-                  await Share.share({ message: `Add me on WordCrack! My code: ${inviteCode}` });
-                } catch {
-                  Alert.alert("Share failed");
-                }
-              })();
-            }}
+            onPress={() => navigation.navigate("ProfileSetup")}
             style={({ pressed }) => [
-              styles.shareButton,
+              styles.actionButton,
               pressed && { opacity: 0.9 },
             ]}
           >
-            <Text style={styles.shareButtonText}>Share</Text>
+            <Text style={styles.actionButtonText}>Edit Profile</Text>
           </Pressable>
         </View>
-      </View>
+      ) : null}
+
+      {/* Friends Section */}
+      {!isAnonymous ? (
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardIcon}>👥</Text>
+            <Text style={styles.cardTitle}>Friends</Text>
+          </View>
+          <Text style={styles.cardDescription}>
+            Share your invite code so friends can add you.
+          </Text>
+          <View style={styles.inviteRow}>
+            <View style={styles.inviteCodeBox}>
+              <Text style={styles.inviteCode}>{inviteCode ?? "—"}</Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                if (!inviteCode) return;
+                void (async () => {
+                  try {
+                    const Share = require("react-native").Share;
+                    await Share.share({ message: `Add me on WordCrack! My code: ${inviteCode}` });
+                  } catch {
+                    Alert.alert("Share failed");
+                  }
+                })();
+              }}
+              style={({ pressed }) => [
+                styles.shareButton,
+                pressed && { opacity: 0.9 },
+              ]}
+            >
+              <Text style={styles.shareButtonText}>Share</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
 
       {/* Notifications Section */}
       <View style={styles.card}>
@@ -201,7 +226,7 @@ export function SettingsScreen({ navigation }: Props) {
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <Text style={styles.cardIcon}>⭐</Text>
-          <Text style={styles.cardTitle}>Premium</Text>
+          <Text style={styles.cardTitle}>Upgrade to WordCrack Premium</Text>
         </View>
         <Text style={{ color: colors.text.secondary, marginBottom: 8 }}>Status: {entitlementLabel}</Text>
         <Text style={styles.cardDescription}>
@@ -212,9 +237,7 @@ export function SettingsScreen({ navigation }: Props) {
             accessibilityRole="button"
             onPress={async () => {
               try {
-                // v1: default to monthly. Add annual/lifetime selection next.
-                await iap.buy(PRODUCTS.premium_monthly);
-                Alert.alert("Success", "Premium unlocked!");
+                navigation.navigate("Paywall");
               } catch (e: any) {
                 Alert.alert("Purchase failed", e?.message ?? "Unknown error");
               }
@@ -224,7 +247,7 @@ export function SettingsScreen({ navigation }: Props) {
               pressed && { opacity: 0.9 },
             ]}
           >
-            <Text style={styles.premiumButtonText}>Go Premium</Text>
+            <Text style={styles.premiumButtonText}>Upgrade</Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -266,6 +289,32 @@ export function SettingsScreen({ navigation }: Props) {
             <Text style={styles.legalLinkText}>Terms of Service</Text>
           </Pressable>
         </View>
+      </View>
+
+      {/* Sign out */}
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardIcon}>🚪</Text>
+          <Text style={styles.cardTitle}>Sign out</Text>
+        </View>
+        <Text style={styles.cardDescription}>
+          You can sign back in anytime.
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            Alert.alert("Sign out?", "Are you sure you want to sign out?", [
+              { text: "Cancel", style: "cancel" },
+              { text: "Sign Out", style: "destructive", onPress: () => void signOut() },
+            ]);
+          }}
+          style={({ pressed }) => [
+            styles.signOutButton,
+            pressed && { opacity: 0.9 },
+          ]}
+        >
+          <Text style={styles.signOutButtonText}>Sign Out</Text>
+        </Pressable>
       </View>
 
       <Text style={styles.version}>WordCrack v1.0.0</Text>
@@ -411,6 +460,19 @@ const styles = StyleSheet.create({
     color: colors.primary.blue,
     fontSize: 14,
     fontWeight: "600",
+  },
+  signOutButton: {
+    backgroundColor: "rgba(220, 38, 38, 0.12)",
+    borderRadius: borderRadius.medium,
+    padding: 14,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(220, 38, 38, 0.35)",
+  },
+  signOutButtonText: {
+    color: "#dc2626",
+    fontWeight: "900",
+    fontSize: 15,
   },
   version: {
     textAlign: "center",
