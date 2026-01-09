@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, Text, View, StyleSheet } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../AppRoot";
-import { getTodayPuzzle, startAttempt, submitAttempt, useHint, type HintType } from "../lib/api";
+import { getPracticePuzzle, getTodayPuzzle, startAttempt, submitAttempt, useHint, type HintType } from "../lib/api";
 import { setJson } from "../lib/storage";
 import { colors, shadows, borderRadius } from "../theme/colors";
 import { IncorrectModal } from "../components/IncorrectModal";
@@ -74,13 +74,13 @@ export function PuzzleScreen({ navigation, route }: Props) {
         setPenaltyMs(0);
         setHintsUsedCount(0);
 
-        const puzzle = await getTodayPuzzle();
+        const puzzle = mode === "practice" ? await getPracticePuzzle() : await getTodayPuzzle();
 
         if (!mounted) return;
         setPuzzleId(puzzle.id);
         setCipherWord(puzzle.cipher_word);
         setLetterSets(puzzle.letter_sets);
-        await setJson("wordcrack:todayPuzzleCache", puzzle);
+        await setJson(mode === "practice" ? "wordcrack:practicePuzzleCache" : "wordcrack:todayPuzzleCache", puzzle);
       } catch (e: any) {
         Alert.alert("Can't start puzzle", e?.message ?? "Unknown error", [{ text: "OK", onPress: () => navigation.goBack() }]);
       } finally {

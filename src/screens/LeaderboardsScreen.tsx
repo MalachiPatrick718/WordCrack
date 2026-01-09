@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Image, Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
 import { addFriendByInviteCode, getDailyLeaderboard, getFriendsLeaderboard, type LeaderboardEntry } from "../lib/api";
 import { useAuth } from "../state/AuthProvider";
+import { useIap } from "../purchases/IapProvider";
 import { colors, shadows, borderRadius } from "../theme/colors";
 
 type Tab = "daily" | "friends";
@@ -23,6 +24,7 @@ function getRankColor(rank: number): string {
 
 export function LeaderboardsScreen() {
   const { user } = useAuth();
+  const iap = useIap();
   const [tab, setTab] = useState<Tab>("daily");
   const [dailyEntries, setDailyEntries] = useState<LeaderboardEntry[] | null>(null);
   const [friendsEntries, setFriendsEntries] = useState<LeaderboardEntry[] | null>(null);
@@ -30,10 +32,17 @@ export function LeaderboardsScreen() {
   const [inviteCode, setInviteCode] = useState("");
 
   const isAnonymous = Boolean((user as any)?.is_anonymous) || (user as any)?.app_metadata?.provider === "anonymous";
+  const canUseFriends = !isAnonymous && iap.premium;
 
   const activeEntries = useMemo(() => {
     return tab === "daily" ? dailyEntries : friendsEntries;
   }, [tab, dailyEntries, friendsEntries]);
+
+  const displayEntries = useMemo(() => {
+    const entries = activeEntries ?? [];
+    if (tab === "daily" && !iap.premium) return entries.slice(0, 3);
+    return entries;
+  }, [activeEntries, tab, iap.premium]);
 
   const load = async (t: Tab) => {
     try {
@@ -52,8 +61,8 @@ export function LeaderboardsScreen() {
   };
 
   useEffect(() => {
-    // Guests can see global leaderboard, but friends requires a real account.
-    if (tab === "friends" && isAnonymous) {
+    // Friends requires Premium.
+    if (tab === "friends" && !canUseFriends) {
       setTab("daily");
       return;
     }
@@ -76,7 +85,7 @@ export function LeaderboardsScreen() {
             🌍 Global
           </Text>
         </Pressable>
-        {!isAnonymous ? (
+        {canUseFriends ? (
           <Pressable
             accessibilityRole="button"
             onPress={() => setTab("friends")}
@@ -90,15 +99,23 @@ export function LeaderboardsScreen() {
             </Text>
           </Pressable>
         ) : (
-          <View style={[styles.tab, styles.tabInactive, { opacity: 0.5 }]}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              Alert.alert("WordCrack Premium", "Upgrade to unlock friends leaderboards.", [
+                { text: "Not now", style: "cancel" },
+              ]);
+            }}
+            style={[styles.tab, styles.tabInactive, { opacity: 0.5 }]}
+          >
             <Text style={styles.tabText}>👥 Friends</Text>
-          </View>
+          </Pressable>
         )}
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Add Friend Section */}
-        {tab === "friends" && !isAnonymous && (
+        {tab === "friends" && canUseFriends && (
           <View style={styles.addFriendCard}>
             <Text style={styles.cardTitle}>Add a Friend</Text>
             <TextInput
@@ -154,7 +171,7 @@ export function LeaderboardsScreen() {
         )}
 
         {/* Leaderboard Entries */}
-        {(activeEntries ?? []).map((e, i) => (
+        {displayEntries.map((e, i) => (
           <View
             key={`${e.user_id}:${i}`}
             style={[
@@ -178,6 +195,7 @@ export function LeaderboardsScreen() {
                 <View style={styles.usernameRow}>
                   <Text style={styles.username} numberOfLines={1}>
                     {e.username}
+                    {e.is_premium ? " ⭐" : ""}
                   </Text>
                   {user?.id === e.user_id ? (
                     <View style={styles.mePillInline}>

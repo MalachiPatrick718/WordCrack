@@ -17,6 +17,7 @@ import { SettingsScreen } from "./screens/SettingsScreen";
 import { LegalScreen } from "./screens/LegalScreen";
 import { ProfileSetupScreen } from "./screens/ProfileSetupScreen";
 import { PaywallScreen } from "./screens/PaywallScreen";
+import { colors } from "./theme/colors";
 
 export type RootStackParamList = {
   Onboarding: undefined;
@@ -135,7 +136,15 @@ function BootRouter() {
               initialAvatarUrl: profile?.avatar_url ?? undefined,
             }}
           />
-          <Stack.Screen name="Home" component={HomeScreen} options={{ title: "WordCrack" }} />
+          <Stack.Screen
+            name="Home"
+            component={HomeScreen}
+            options={{
+              title: "",
+              headerStyle: { backgroundColor: colors.background.main },
+              headerShadowVisible: false,
+            }}
+          />
           <Stack.Screen name="Puzzle" component={PuzzleScreen} options={{ title: "Today's Puzzle" }} />
           <Stack.Screen name="Results" component={ResultsScreen} options={{ title: "Results" }} />
           <Stack.Screen name="Leaderboards" component={LeaderboardsScreen} options={{ title: "Leaderboards" }} />

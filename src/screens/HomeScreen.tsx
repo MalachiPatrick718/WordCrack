@@ -3,15 +3,16 @@ import { Image, Pressable, Text, View, StyleSheet } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "../AppRoot";
-import { useAuth } from "../state/AuthProvider";
 import { colors, shadows, borderRadius } from "../theme/colors";
 import { getTodayPuzzle } from "../lib/api";
 import { supabase } from "../lib/supabase";
+import { useAuth } from "../state/AuthProvider";
+import { useIap } from "../purchases/IapProvider";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
-function msUntilNextUtcDay(now = new Date()): number {
-  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0));
+function msUntilNextUtcHour(now = new Date()): number {
+  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours() + 1, 0, 0));
   return next.getTime() - now.getTime();
 }
 
@@ -24,8 +25,11 @@ function formatHms(ms: number): string {
 }
 
 export function HomeScreen({ navigation }: Props) {
+  const { user } = useAuth();
+  const iap = useIap();
   const [tick, setTick] = useState(0);
   const [solvedToday, setSolvedToday] = useState<boolean>(false);
+  const [username, setUsername] = useState<string>("player");
 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 1000);
@@ -66,25 +70,47 @@ export function HomeScreen({ navigation }: Props) {
     }, [])
   );
 
+  useFocusEffect(
+    React.useCallback(() => {
+      let mounted = true;
+      (async () => {
+        if (!user) return;
+        try {
+          const { data } = await supabase
+            .from("profiles")
+            .select("username")
+            .eq("user_id", user.id)
+            .maybeSingle();
+          if (!mounted) return;
+          if (data?.username) setUsername(data.username);
+        } catch {
+          // ignore
+        }
+      })();
+      return () => {
+        mounted = false;
+      };
+    }, [user?.id])
+  );
+
   const today = useMemo(() => {
     const d = new Date();
     return d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
   }, [tick]);
-  const countdown = useMemo(() => formatHms(msUntilNextUtcDay()), [tick]);
+  const countdown = useMemo(() => formatHms(msUntilNextUtcHour()), [tick]);
 
   return (
     <View style={styles.container}>
-      {/* Logo */}
-      <Image
-        source={require("../../assets/icon.png")}
-        style={styles.logo}
-        resizeMode="contain"
-      />
+        {/* Centered logo */}
+        <View style={styles.logoWrap}>
+          <Image source={require("../../assets/icon.png")} style={styles.logoCentered} resizeMode="contain" />
+          <Text style={styles.welcome}>Welcome back, {username}</Text>
+        </View>
 
-      {/* Today's Card */}
+      {/* Next Puzzle Card */}
       <View style={styles.todayCard}>
         <View style={styles.todayHeader}>
-          <Text style={styles.todayLabel}>Today's Puzzle</Text>
+          <Text style={styles.todayLabel}>Next Puzzle</Text>
           <View style={styles.dateBadge}>
             <Text style={styles.dateText}>{today}</Text>
           </View>
@@ -110,6 +136,27 @@ export function HomeScreen({ navigation }: Props) {
         <Text style={styles.playButtonText}>{solvedToday ? "Solved Today's Puzzle" : "Solve Today's Puzzle"}</Text>
         <Text style={styles.playButtonSubtext}>
           {solvedToday ? "Come back for the next puzzle." : "Solve the daily cipher!"}
+        </Text>
+      </Pressable>
+
+      {/* Practice Button (Premium) */}
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => {
+          if (iap.premium) navigation.navigate("Puzzle", { mode: "practice" });
+          else navigation.navigate("Paywall");
+        }}
+        style={({ pressed }) => [
+          styles.practiceButton,
+          !iap.premium && styles.practiceButtonLocked,
+          pressed && { opacity: 0.92 },
+        ]}
+      >
+        <Text style={styles.practiceButtonText}>
+          {iap.premium ? "Practice Puzzles" : "Practice Puzzles 🔒"}
+        </Text>
+        <Text style={styles.practiceButtonSubtext}>
+          {iap.premium ? "Unlimited non‑leaderboard puzzles" : "Upgrade to unlock unlimited practice"}
         </Text>
       </Pressable>
 
@@ -154,7 +201,7 @@ export function HomeScreen({ navigation }: Props) {
         <Text style={styles.settingsIcon}>⚙️</Text>
         <Text style={styles.settingsText}>Settings</Text>
       </Pressable>
-      <View style={{ flex: 1 }} />
+        <View style={{ flex: 1 }} />
     </View>
   );
 }
@@ -165,11 +212,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.main,
     padding: 20,
   },
-  logo: {
-    width: 160,
-    height: 100,
-    alignSelf: "center",
-    marginBottom: 16,
+  logoWrap: {
+    alignItems: "center",
+    marginBottom: 14,
+    paddingTop: 10,
+  },
+  logoCentered: {
+    width: 230,
+    height: 96,
+  },
+  welcome: {
+    marginTop: 6,
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.text.secondary,
   },
   todayCard: {
     backgroundColor: colors.background.card,
@@ -237,6 +293,28 @@ const styles = StyleSheet.create({
   },
   playButtonSubtext: {
     fontSize: 14,
+    color: colors.primary.lightBlue,
+    marginTop: 4,
+  },
+  practiceButton: {
+    backgroundColor: colors.primary.darkBlue,
+    borderRadius: borderRadius.xl,
+    padding: 18,
+    alignItems: "center",
+    marginTop: 12,
+    ...shadows.small,
+  },
+  practiceButtonLocked: {
+    opacity: 0.9,
+    backgroundColor: colors.text.muted,
+  },
+  practiceButtonText: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: colors.text.light,
+  },
+  practiceButtonSubtext: {
+    fontSize: 13,
     color: colors.primary.lightBlue,
     marginTop: 4,
   },

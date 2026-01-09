@@ -1,9 +1,15 @@
 import React, { useEffect, useState } from "react";
-import { Alert, Text, View, StyleSheet } from "react-native";
+import { Alert, Pressable, Text, View, StyleSheet } from "react-native";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { getMyStats } from "../lib/api";
+import { RootStackParamList } from "../AppRoot";
+import { useIap } from "../purchases/IapProvider";
 import { colors, shadows, borderRadius } from "../theme/colors";
 
-export function StatsScreen() {
+type Props = NativeStackScreenProps<RootStackParamList, "Stats">;
+
+export function StatsScreen({ navigation }: Props) {
+  const iap = useIap();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<Awaited<ReturnType<typeof getMyStats>> | null>(null);
 
@@ -61,39 +67,58 @@ export function StatsScreen() {
               <Text style={styles.statLabel}>Best Time</Text>
             </View>
 
-            <View style={[styles.statCard, { backgroundColor: colors.tiles[1] }]}>
-              <Text style={styles.statIcon}>💡</Text>
-              <Text style={styles.statValue}>{stats.hint_usage_count}</Text>
-              <Text style={styles.statLabel}>Hints Used</Text>
-            </View>
+            {iap.premium ? (
+              <View style={[styles.statCard, { backgroundColor: colors.tiles[1] }]}>
+                <Text style={styles.statIcon}>💡</Text>
+                <Text style={styles.statValue}>{stats.hint_usage_count}</Text>
+                <Text style={styles.statLabel}>Hints Used</Text>
+              </View>
+            ) : (
+              <View style={[styles.statCard, { backgroundColor: colors.tiles[1], opacity: 0.75 }]}>
+                <Text style={styles.statIcon}>⭐</Text>
+                <Text style={styles.statValue}>Premium</Text>
+                <Text style={styles.statLabel}>Unlock more stats</Text>
+              </View>
+            )}
           </View>
 
-          {/* Average Times */}
-          <View style={styles.averagesCard}>
-            <Text style={styles.cardTitle}>Average Times</Text>
+          {iap.premium ? (
+            <View style={styles.averagesCard}>
+              <Text style={styles.cardTitle}>Average Times</Text>
 
-            <View style={styles.averageRow}>
-              <View style={styles.averageInfo}>
-                <Text style={styles.averageLabel}>Last 7 Days</Text>
-                <Text style={styles.averageValue}>{fmtMs(stats.avg_7d_ms)}</Text>
+              <View style={styles.averageRow}>
+                <View style={styles.averageInfo}>
+                  <Text style={styles.averageLabel}>Last 7 Days</Text>
+                  <Text style={styles.averageValue}>{fmtMs(stats.avg_7d_ms)}</Text>
+                </View>
+                <View style={[styles.averageBadge, { backgroundColor: colors.tiles[2] }]}>
+                  <Text style={styles.averageBadgeText}>7D</Text>
+                </View>
               </View>
-              <View style={[styles.averageBadge, { backgroundColor: colors.tiles[2] }]}>
-                <Text style={styles.averageBadgeText}>7D</Text>
+
+              <View style={styles.divider} />
+
+              <View style={styles.averageRow}>
+                <View style={styles.averageInfo}>
+                  <Text style={styles.averageLabel}>Last 30 Days</Text>
+                  <Text style={styles.averageValue}>{fmtMs(stats.avg_30d_ms)}</Text>
+                </View>
+                <View style={[styles.averageBadge, { backgroundColor: colors.tiles[4] }]}>
+                  <Text style={styles.averageBadgeText}>30D</Text>
+                </View>
               </View>
             </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.averageRow}>
-              <View style={styles.averageInfo}>
-                <Text style={styles.averageLabel}>Last 30 Days</Text>
-                <Text style={styles.averageValue}>{fmtMs(stats.avg_30d_ms)}</Text>
-              </View>
-              <View style={[styles.averageBadge, { backgroundColor: colors.tiles[4] }]}>
-                <Text style={styles.averageBadgeText}>30D</Text>
-              </View>
-            </View>
-          </View>
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => navigation.navigate("Paywall")}
+              style={({ pressed }) => [styles.upgradeCard, pressed && { opacity: 0.92 }]}
+            >
+              <Text style={styles.upgradeTitle}>Unlock advanced stats</Text>
+              <Text style={styles.upgradeText}>Upgrade to WordCrack Premium to see averages, trends, and more.</Text>
+              <Text style={styles.upgradeCta}>Upgrade</Text>
+            </Pressable>
+          )}
         </>
       )}
     </View>
@@ -213,5 +238,26 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: colors.ui.border,
     marginVertical: 16,
+  },
+  upgradeCard: {
+    backgroundColor: colors.primary.darkBlue,
+    borderRadius: borderRadius.xl,
+    padding: 18,
+    ...shadows.small,
+  },
+  upgradeTitle: {
+    color: colors.text.light,
+    fontWeight: "900",
+    fontSize: 16,
+    marginBottom: 6,
+  },
+  upgradeText: {
+    color: colors.primary.lightBlue,
+    lineHeight: 20,
+  },
+  upgradeCta: {
+    marginTop: 12,
+    color: colors.primary.yellow,
+    fontWeight: "900",
   },
 });

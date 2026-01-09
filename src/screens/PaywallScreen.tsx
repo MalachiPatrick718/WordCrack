@@ -67,17 +67,6 @@ export function PaywallScreen({ navigation }: Props) {
           <Text style={styles.heroSubtitle}>Unlock the full WordCrack experience</Text>
         </View>
 
-        <View style={styles.limitsCard}>
-          <Text style={styles.limitsTitle}>Free Account Limitations:</Text>
-          <View style={styles.limitsList}>
-            <Text style={styles.limitItem}>✕ Limited practice puzzles</Text>
-            <Text style={styles.limitItem}>✕ Friends leaderboard locked</Text>
-            <Text style={styles.limitItem}>✕ Advanced stats locked</Text>
-            <Text style={styles.limitItem}>✕ Cosmetics locked</Text>
-            <Text style={styles.limitItem}>✕ Ads</Text>
-          </View>
-        </View>
-
         <View style={styles.featuresCard}>
           <Text style={styles.sectionTitle}>Unlock with WordCrack Premium</Text>
 
@@ -262,17 +251,6 @@ const styles = StyleSheet.create({
   heroIcon: { fontSize: 44, marginBottom: 6 },
   heroTitle: { color: colors.text.light, fontSize: 30, fontWeight: "900", textAlign: "center" },
   heroSubtitle: { color: colors.primary.lightBlue, marginTop: 6, fontSize: 16, textAlign: "center" },
-
-  limitsCard: {
-    borderRadius: borderRadius.xl,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: "rgba(252, 92, 101, 0.35)",
-    backgroundColor: "rgba(252, 92, 101, 0.06)",
-  },
-  limitsTitle: { fontSize: 16, fontWeight: "900", color: "#b91c1c", marginBottom: 10 },
-  limitsList: { gap: 8 },
-  limitItem: { color: "#b91c1c", fontWeight: "700" },
 
   featuresCard: {
     backgroundColor: colors.background.card,

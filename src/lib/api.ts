@@ -65,6 +65,7 @@ export type LeaderboardEntry = {
   user_id: string;
   username: string;
   avatar_url: string | null;
+  is_premium?: boolean;
   final_time_ms: number;
   penalty_ms: number;
   hints_used_count: number;

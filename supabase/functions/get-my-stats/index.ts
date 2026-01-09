@@ -56,10 +56,13 @@ Deno.serve(async (req) => {
 
     // Current streak: consecutive puzzle_date ending today (if today's solved) otherwise 0.
     let current_streak = 0;
-    const byDate = rows
-      .map((r) => r.puzzle_date)
-      .filter(Boolean)
-      .sort((a, b) => (a > b ? -1 : a < b ? 1 : 0));
+    const byDate = Array.from(
+      new Set(
+        rows
+          .map((r) => r.puzzle_date)
+          .filter(Boolean),
+      ),
+    ).sort((a, b) => (a > b ? -1 : a < b ? 1 : 0));
 
     if (byDate.length && byDate[0] === today) {
       current_streak = 1;

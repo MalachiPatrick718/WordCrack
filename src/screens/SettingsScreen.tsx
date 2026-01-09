@@ -98,8 +98,8 @@ export function SettingsScreen({ navigation }: Props) {
         </View>
       ) : null}
 
-      {/* Friends Section */}
-      {!isAnonymous ? (
+      {/* Friends Section (Premium only) */}
+      {!isAnonymous && iap.premium ? (
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Text style={styles.cardIcon}>👥</Text>
@@ -226,29 +226,27 @@ export function SettingsScreen({ navigation }: Props) {
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <Text style={styles.cardIcon}>⭐</Text>
-          <Text style={styles.cardTitle}>Upgrade to WordCrack Premium</Text>
+          <Text style={styles.cardTitle}>{iap.premium ? "WordCrack Premium" : "Upgrade to WordCrack Premium"}</Text>
         </View>
         <Text style={{ color: colors.text.secondary, marginBottom: 8 }}>Status: {entitlementLabel}</Text>
         <Text style={styles.cardDescription}>
-          Unlock unlimited practice puzzles, advanced stats, and more!
+          {iap.premium
+            ? "You have full access to premium features."
+            : "Unlock unlimited practice puzzles, advanced stats, and more!"}
         </Text>
         <View style={styles.premiumButtons}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={async () => {
-              try {
-                navigation.navigate("Paywall");
-              } catch (e: any) {
-                Alert.alert("Purchase failed", e?.message ?? "Unknown error");
-              }
-            }}
-            style={({ pressed }) => [
-              styles.premiumButton,
-              pressed && { opacity: 0.9 },
-            ]}
-          >
-            <Text style={styles.premiumButtonText}>Upgrade</Text>
-          </Pressable>
+          {!iap.premium ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => navigation.navigate("Paywall")}
+              style={({ pressed }) => [
+                styles.premiumButton,
+                pressed && { opacity: 0.9 },
+              ]}
+            >
+              <Text style={styles.premiumButtonText}>Upgrade</Text>
+            </Pressable>
+          ) : null}
           <Pressable
             accessibilityRole="button"
             onPress={async () => {
