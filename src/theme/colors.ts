@@ -1,6 +1,12 @@
 // WordCrack Theme Colors - Matching the playful logo style
+//
+// IMPORTANT:
+// - `lightColors` and `darkColors` are the palettes.
+// - Use ThemeProvider (`src/theme/theme.tsx`) to access the active palette at runtime.
 
-export const colors = {
+export type ThemeMode = "light" | "dark";
+
+export const lightColors = {
   // Primary colors from logo
   primary: {
     blue: "#4A90D9",        // Main blue (magnifying glass, CRACK text)
@@ -67,29 +73,59 @@ export const colors = {
   },
 };
 
-export const shadows = {
-  small: {
-    shadowColor: colors.ui.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
-    elevation: 2,
+export const darkColors: typeof lightColors = {
+  ...lightColors,
+  background: {
+    main: "#0B1220",
+    card: "#121B2E",
+    dark: "#070B14",
+    gradient: {
+      start: "#2D5A8A",
+      end: "#0B1220",
+    },
   },
-  medium: {
-    shadowColor: colors.ui.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 8,
-    elevation: 4,
+  text: {
+    primary: "#ECF0F1",
+    secondary: "rgba(236,240,241,0.75)",
+    light: "#FFFFFF",
+    muted: "rgba(236,240,241,0.45)",
   },
-  large: {
-    shadowColor: colors.ui.shadow,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 1,
-    shadowRadius: 12,
-    elevation: 6,
+  ui: {
+    ...lightColors.ui,
+    border: "rgba(255,255,255,0.12)",
+    shadow: "rgba(0, 0, 0, 0.5)",
   },
 };
+
+export function getColors(mode: ThemeMode): typeof lightColors {
+  return mode === "dark" ? darkColors : lightColors;
+}
+
+export function makeShadows(c: typeof lightColors) {
+  return {
+    small: {
+      shadowColor: c.ui.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 1,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    medium: {
+      shadowColor: c.ui.shadow,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 1,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    large: {
+      shadowColor: c.ui.shadow,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 1,
+      shadowRadius: 12,
+      elevation: 6,
+    },
+  };
+}
 
 export const borderRadius = {
   small: 8,
@@ -98,3 +134,9 @@ export const borderRadius = {
   xl: 20,
   round: 9999,
 };
+
+// Back-compat exports (do not use in new code).
+// Existing code will be refactored to ThemeProvider progressively.
+export const colors = lightColors;
+export const shadows = makeShadows(lightColors);
+

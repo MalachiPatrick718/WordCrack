@@ -5,6 +5,7 @@ export type PuzzlePublic = {
   puzzle_date: string;
   cipher_word: string;
   letter_sets: string[][];
+  start_idxs?: number[] | null;
   theme_hint: string | null;
 };
 
@@ -20,6 +21,7 @@ export type Attempt = {
   final_time_ms: number | null;
   hints_used: unknown[];
   is_completed: boolean;
+  gave_up?: boolean;
 };
 
 async function invoke<T>(name: string, opts: { method?: string; body?: unknown } = {}): Promise<T> {
@@ -48,17 +50,29 @@ export async function startAttempt(puzzle_id: string, mode: "daily" | "practice"
   return res.attempt;
 }
 
-export type HintType = "shift_count" | "shift_position" | "theme";
+export type HintType = "shift_count" | "shift_position" | "reveal_letter";
 
-export async function useHint(attempt_id: string, hint_type: HintType): Promise<{ message: string; penalty_ms: number; attempt: Pick<Attempt, "id" | "penalty_ms" | "hints_used"> }> {
+export async function useHint(
+  attempt_id: string,
+  hint_type: HintType,
+): Promise<{
+  message: string;
+  penalty_ms: number;
+  meta?: Record<string, unknown>;
+  attempt: Pick<Attempt, "id" | "penalty_ms" | "hints_used">;
+}> {
   const res = await invoke<{ hint: { message: string; penalty_ms: number }; attempt: Pick<Attempt, "id" | "penalty_ms" | "hints_used"> }>("use-hint", {
     body: { attempt_id, hint_type },
   });
-  return { message: res.hint.message, penalty_ms: res.hint.penalty_ms, attempt: res.attempt };
+  return { message: res.hint.message, penalty_ms: res.hint.penalty_ms, meta: (res as any).hint?.meta, attempt: res.attempt };
 }
 
 export async function submitAttempt(attempt_id: string, guess_word: string): Promise<{ correct: boolean; attempt?: Attempt; rank?: number | null }> {
   return await invoke("submit-attempt", { body: { attempt_id, guess_word } });
+}
+
+export async function giveUpAttempt(attempt_id: string): Promise<{ gave_up: true; target_word: string }> {
+  return await invoke("give-up", { body: { attempt_id } });
 }
 
 export type LeaderboardEntry = {
@@ -71,10 +85,50 @@ export type LeaderboardEntry = {
   hints_used_count: number;
 };
 
+export type GlobalRankingEntry = {
+  user_id: string;
+  username: string;
+  avatar_url: string | null;
+  puzzles_solved: number;
+  avg_final_time_ms: number;
+  is_premium?: boolean;
+};
+
 export async function getDailyLeaderboard(): Promise<LeaderboardEntry[]> {
   const { data, error } = await supabase.functions.invoke("get-daily-leaderboard", { method: "GET" });
   if (error) throw error;
   return (data as { entries: LeaderboardEntry[] }).entries ?? [];
+}
+
+export async function getGlobalRankings(opts?: { limit?: number; min_solved?: number }): Promise<GlobalRankingEntry[]> {
+  const res = await invoke<{ entries: GlobalRankingEntry[] }>("get-global-rankings", {
+    body: { limit: opts?.limit, min_solved: opts?.min_solved },
+  });
+  return res.entries ?? [];
+}
+
+export type RecentLeaderboardSection = {
+  puzzle: {
+    id: string;
+    puzzle_date: string;
+    puzzle_hour: number;
+    cipher_word: string;
+    theme_hint: string | null;
+    target_word_revealed: string | null;
+  };
+  entries: LeaderboardEntry[];
+};
+
+export async function getRecentDailyLeaderboards(opts?: { limit_puzzles?: number; limit_entries?: number }): Promise<RecentLeaderboardSection[]> {
+  // NOTE: supabase-js `functions.invoke()` URL-encodes the function name, so query strings break.
+  // We use POST + body instead.
+  const res = await invoke<{ sections: RecentLeaderboardSection[] }>("get-recent-daily-leaderboards", {
+    body: {
+      limit_puzzles: opts?.limit_puzzles,
+      limit_entries: opts?.limit_entries,
+    },
+  });
+  return res.sections ?? [];
 }
 
 export async function getFriendsLeaderboard(): Promise<LeaderboardEntry[]> {

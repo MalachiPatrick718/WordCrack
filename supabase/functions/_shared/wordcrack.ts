@@ -1,16 +1,18 @@
-export type HintType = "shift_count" | "shift_position" | "theme";
+export type HintType = "shift_count" | "shift_position" | "reveal_letter";
 
 export const HINT_PENALTY_MS: Record<HintType, number> = {
   shift_count: 5_000,
   shift_position: 10_000,
-  theme: 8_000,
+  reveal_letter: 8_000,
 };
 
+const WORD_LEN = 5;
+
 export function computeShiftedPositions(cipherWord: string, targetWord: string): boolean[] {
-  if (cipherWord.length !== 6 || targetWord.length !== 6) {
-    throw new Error("Expected 6-letter cipher and target words");
+  if (cipherWord.length !== WORD_LEN || targetWord.length !== WORD_LEN) {
+    throw new Error(`Expected ${WORD_LEN}-letter cipher and target words`);
   }
-  return Array.from({ length: 6 }, (_, i) => cipherWord[i] !== targetWord[i]);
+  return Array.from({ length: WORD_LEN }, (_, i) => cipherWord[i] !== targetWord[i]);
 }
 
 function charToN(c: string): number {
@@ -65,12 +67,12 @@ export function buildHintMessage(args: {
   if (args.hintType === "shift_count") {
     const count = shiftedIdx.length;
     const extra = amount != null ? ` Shift amount: ${amount}.` : "";
-    return { message: `${count} of the 6 letters are shifted.${extra}`, meta: { shiftedCount: count, shiftAmount: amount } };
+    return { message: `${count} of the ${WORD_LEN} letters are shifted.${extra}`, meta: { shiftedCount: count, shiftAmount: amount } };
   }
 
   if (args.hintType === "shift_position") {
     if (unshiftedIdx.length === 0) {
-      return { message: "All 6 positions are shifted.", meta: { unshiftedPositions: [] } };
+      return { message: `All ${WORD_LEN} positions are shifted.`, meta: { unshiftedPositions: [] } };
     }
     const picked = pickRandom(unshiftedIdx, Math.min(2, unshiftedIdx.length));
     if (picked.length === 1) {
@@ -85,9 +87,15 @@ export function buildHintMessage(args: {
     };
   }
 
-  // theme
-  const theme = (args.themeHint ?? "").trim();
-  return { message: `Theme: ${theme || "Unknown"}` };
+  // reveal_letter
+  // Pick 1 random position to reveal (1-based), return the correct target letter at that position.
+  const pos0 = crypto.getRandomValues(new Uint32Array(1))[0] % WORD_LEN; // 0..4
+  const position = pos0 + 1;
+  const letter = args.targetWord[pos0];
+  return {
+    message: `Letter ${letter} goes in position ${position}.`,
+    meta: { position, letter },
+  };
 }
 
 

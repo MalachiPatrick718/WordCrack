@@ -5,7 +5,7 @@ import { supabaseAdmin } from "../_shared/supabase.ts";
 import { getUtcDateString, json } from "../_shared/utils.ts";
 import { withCors } from "../_shared/http.ts";
 
-function getUtcHour(now = new Date()): number {
+function getPuzzleSlot(now = new Date()): number {
   return now.getUTCHours();
 }
 
@@ -18,10 +18,10 @@ Deno.serve(async (req) => {
     const user = await requireUser(req);
     const url = new URL(req.url);
     const date = url.searchParams.get("date") ?? getUtcDateString();
-    const hourParam = url.searchParams.get("hour");
-    const hour = hourParam == null ? getUtcHour() : Number(hourParam);
-    if (!Number.isFinite(hour) || hour < 0 || hour > 23) {
-      return json({ error: "Invalid hour (expected 0-23)" }, { status: 400, headers: corsHeaders });
+    const slotParam = url.searchParams.get("slot") ?? url.searchParams.get("hour");
+    const slot = slotParam == null ? getPuzzleSlot() : Number(slotParam);
+    if (!Number.isFinite(slot) || slot < 0 || slot > 23) {
+      return json({ error: "Invalid slot (expected 0-23)" }, { status: 400, headers: corsHeaders });
     }
     const limit = Math.min(200, Math.max(1, Number(url.searchParams.get("limit") ?? "100")));
 
@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
       .from("puzzles")
       .select("id,puzzle_date,puzzle_hour")
       .eq("puzzle_date", date)
-      .eq("puzzle_hour", hour)
+      .eq("puzzle_hour", slot)
       .maybeSingle();
     if (puzzleErr) return json({ error: puzzleErr.message }, { status: 500, headers: corsHeaders });
     if (!puzzle) return json({ error: "Puzzle not found" }, { status: 404, headers: corsHeaders });
@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
       .sort((x, y) => (x.final_time_ms ?? 0) - (y.final_time_ms ?? 0))
       .slice(0, limit);
 
-    return json({ date, hour, entries }, { headers: corsHeaders });
+    return json({ date, slot, entries }, { headers: corsHeaders });
   } catch (e) {
     if (e instanceof Response) return withCors(e);
     const msg = e instanceof Error ? e.message : "Unknown error";

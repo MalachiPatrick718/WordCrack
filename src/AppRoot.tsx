@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { NavigationContainer } from "@react-navigation/native";
+import { DarkTheme as NavDarkTheme, DefaultTheme as NavDefaultTheme, NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { ActivityIndicator, View } from "react-native";
 import { AuthProvider, useAuth } from "./state/AuthProvider";
@@ -17,7 +17,9 @@ import { SettingsScreen } from "./screens/SettingsScreen";
 import { LegalScreen } from "./screens/LegalScreen";
 import { ProfileSetupScreen } from "./screens/ProfileSetupScreen";
 import { PaywallScreen } from "./screens/PaywallScreen";
-import { colors } from "./theme/colors";
+import { HowToPlayScreen } from "./screens/HowToPlayScreen";
+import { UpgradeAccountScreen } from "./screens/UpgradeAccountScreen";
+import { ThemeProvider, useTheme } from "./theme/theme";
 
 export type RootStackParamList = {
   Onboarding: undefined;
@@ -25,9 +27,12 @@ export type RootStackParamList = {
   Home: undefined;
   ProfileSetup: { initialUsername?: string; initialAvatarUrl?: string } | undefined;
   Paywall: undefined;
+  UpgradeAccount: { postUpgradeTo?: "Paywall" | "Back" } | undefined;
+  HowToPlay: undefined;
   Puzzle: { mode: "daily" | "practice" };
   Results: {
     attemptId: string;
+    mode: "daily" | "practice";
     solve_time_ms: number;
     penalty_ms: number;
     final_time_ms: number;
@@ -44,6 +49,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 function BootRouter() {
   const { user, initializing } = useAuth();
+  const theme = useTheme();
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
   const [profile, setProfile] = useState<{ username: string; avatar_url: string | null } | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -110,6 +116,10 @@ function BootRouter() {
       initialRouteName={
         !onboarded ? "Onboarding" : !user ? "Auth" : needsProfileSetup ? "ProfileSetup" : "Home"
       }
+      screenOptions={{
+        headerTintColor: theme.colors.text.primary,
+        headerStyle: { backgroundColor: theme.colors.background.main },
+      }}
     >
       {!onboarded ? (
         <Stack.Screen
@@ -141,7 +151,7 @@ function BootRouter() {
             component={HomeScreen}
             options={{
               title: "",
-              headerStyle: { backgroundColor: colors.background.main },
+              headerStyle: { backgroundColor: theme.colors.background.main },
               headerShadowVisible: false,
             }}
           />
@@ -156,6 +166,16 @@ function BootRouter() {
             component={PaywallScreen}
             options={{ headerShown: false, presentation: "modal" }}
           />
+          <Stack.Screen
+            name="UpgradeAccount"
+            component={UpgradeAccountScreen}
+            options={{ headerShown: false, presentation: "modal" }}
+          />
+          <Stack.Screen
+            name="HowToPlay"
+            component={HowToPlayScreen}
+            options={{ headerShown: false, presentation: "modal" }}
+          />
         </>
       )}
     </Stack.Navigator>
@@ -164,9 +184,35 @@ function BootRouter() {
 
 export function AppRoot() {
   return (
+    <ThemeProvider>
+      <ThemedApp />
+    </ThemeProvider>
+  );
+}
+
+function ThemedApp() {
+  const { mode, colors } = useTheme();
+
+  const navTheme = React.useMemo(() => {
+    const base = mode === "dark" ? NavDarkTheme : NavDefaultTheme;
+    return {
+      ...base,
+      colors: {
+        ...base.colors,
+        primary: colors.primary.blue,
+        background: colors.background.main,
+        card: colors.background.card,
+        text: colors.text.primary,
+        border: colors.ui.border,
+        notification: colors.primary.yellow,
+      },
+    };
+  }, [mode, colors]);
+
+  return (
     <AuthProvider>
       <IapProvider>
-        <NavigationContainer>
+        <NavigationContainer theme={navTheme}>
           <BootRouter />
         </NavigationContainer>
       </IapProvider>

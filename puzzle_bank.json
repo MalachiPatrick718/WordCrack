@@ -1,0 +1,13 @@
+[
+  { "target_word": "PLANT", "theme_hint": "Common category" },
+  { "target_word": "CROWN", "theme_hint": "Symbolic" },
+  { "target_word": "SHELF", "theme_hint": "Everyday object" },
+  { "target_word": "TRAIL", "theme_hint": "A way through" },
+  { "target_word": "BRICK", "theme_hint": "Made thing" },
+  { "target_word": "MERCY", "theme_hint": "Abstract" },
+  { "target_word": "VAPOR", "theme_hint": "In the air" },
+  { "target_word": "SPICE", "theme_hint": "In the mix" },
+  { "target_word": "FLINT", "theme_hint": "Hard material" },
+  { "target_word": "SCALE", "theme_hint": "Measure or model" }
+]
+

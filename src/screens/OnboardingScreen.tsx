@@ -1,44 +1,17 @@
 import React, { useMemo, useRef, useState } from "react";
 import { FlatList, Image, Text, View, useWindowDimensions, Pressable, StyleSheet } from "react-native";
 import { markOnboarded } from "../AppRoot";
-import { colors, shadows, borderRadius } from "../theme/colors";
-
-type Slide = { title: string; body: string; emoji: string };
+import { useTheme } from "../theme/theme";
+import { HOW_TO_PLAY_SLIDES, type HowToPlaySlide } from "../content/howToPlay";
 
 export function OnboardingScreen({ onComplete }: { navigation: any; onComplete: () => void }) {
   const { width } = useWindowDimensions();
-  const slides: Slide[] = useMemo(
-    () => [
-      {
-        emoji: "🔓",
-        title: "Welcome to WordCrack",
-        body: "A daily 6-letter cipher puzzle. Same puzzle for everyone, every day. Race against the clock!"
-      },
-      {
-        emoji: "🔤",
-        title: "Cipher Word",
-        body: "You'll see a scrambled cipher word. Your goal is to crack the code and find the hidden target word."
-      },
-      {
-        emoji: "🎯",
-        title: "6 Letter Columns",
-        body: "Each column shows 4-5 possible letters. Use the arrows to cycle through and find the right one."
-      },
-      {
-        emoji: "⏱️",
-        title: "Time & Penalties",
-        body: "Your score is based on speed. Hints are available but they add time penalties. Use them wisely!"
-      },
-      {
-        emoji: "🏆",
-        title: "Compete & Win",
-        body: "Challenge friends, climb leaderboards, and prove you're the fastest code cracker!"
-      },
-    ],
-    [],
-  );
+  const { colors, shadows, borderRadius } = useTheme();
+  const styles = useMemo(() => makeStyles(colors, shadows, borderRadius), [colors, shadows, borderRadius]);
+  // Reuse the same content as the in-app "How to Play" modal.
+  const slides: HowToPlaySlide[] = useMemo(() => HOW_TO_PLAY_SLIDES, []);
 
-  const listRef = useRef<FlatList<Slide>>(null);
+  const listRef = useRef<FlatList<HowToPlaySlide>>(null);
   const [idx, setIdx] = useState(0);
 
   const onDone = async () => {
@@ -49,11 +22,13 @@ export function OnboardingScreen({ onComplete }: { navigation: any; onComplete: 
   return (
     <View style={styles.container}>
       {/* Logo at top */}
-      <Image
-        source={require("../../assets/icon.png")}
-        style={styles.logo}
-        resizeMode="contain"
-      />
+      <View style={styles.logoCard}>
+        <Image
+          source={require("../../assets/icon.png")}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+      </View>
 
       <FlatList
         ref={listRef}
@@ -66,9 +41,9 @@ export function OnboardingScreen({ onComplete }: { navigation: any; onComplete: 
           const next = Math.round(e.nativeEvent.contentOffset.x / width);
           setIdx(next);
         }}
-        renderItem={({ item }) => (
+        renderItem={({ item, index }) => (
           <View style={[styles.slide, { width }]}>
-            <View style={[styles.emojiContainer, { backgroundColor: colors.tiles[slides.indexOf(item) % colors.tiles.length] }]}>
+            <View style={[styles.emojiContainer, { backgroundColor: colors.tiles[index % colors.tiles.length] }]}>
               <Text style={styles.emoji}>{item.emoji}</Text>
             </View>
             <Text style={styles.slideTitle}>{item.title}</Text>
@@ -131,7 +106,7 @@ export function OnboardingScreen({ onComplete }: { navigation: any; onComplete: 
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: any, shadows: any, borderRadius: any) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.primary.darkBlue,
@@ -141,7 +116,13 @@ const styles = StyleSheet.create({
     height: 90,
     alignSelf: "center",
     marginTop: 60,
-    marginBottom: 20,
+  },
+  logoCard: {
+    alignSelf: "center",
+    backgroundColor: "transparent",
+    borderRadius: 0,
+    padding: 0,
+    marginBottom: 18,
   },
   slide: {
     paddingHorizontal: 32,

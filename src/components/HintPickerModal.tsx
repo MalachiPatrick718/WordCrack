@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
-import { borderRadius, colors, shadows } from "../theme/colors";
+import { useTheme } from "../theme/theme";
 import type { HintType } from "../lib/api";
 
 type Item = { type: HintType; title: string; subtitle: string };
@@ -8,7 +8,7 @@ type Item = { type: HintType; title: string; subtitle: string };
 const ITEMS: Item[] = [
   { type: "shift_count", title: "Shift Amount", subtitle: "+5s" },
   { type: "shift_position", title: "Unshifted Positions", subtitle: "+10s" },
-  { type: "theme", title: "Theme", subtitle: "+8s" },
+  { type: "reveal_letter", title: "Reveal Letter", subtitle: "+8s" },
 ];
 
 type Props = {
@@ -20,6 +20,8 @@ type Props = {
 };
 
 export function HintPickerModal({ visible, remainingHints, usedTypes, onPick, onClose }: Props) {
+  const { colors, shadows, borderRadius } = useTheme();
+  const styles = useMemo(() => makeStyles(colors, shadows, borderRadius), [colors, shadows, borderRadius]);
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
@@ -68,7 +70,8 @@ export function HintPickerModal({ visible, remainingHints, usedTypes, onPick, on
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: any, shadows: any, borderRadius: any) {
+  return StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",
@@ -113,5 +116,6 @@ const styles = StyleSheet.create({
     borderColor: colors.ui.border,
   },
   cancelText: { fontWeight: "800", color: colors.text.primary },
-});
+  });
+}
 

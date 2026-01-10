@@ -4,13 +4,18 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../AppRoot";
 import { useIap } from "../purchases/IapProvider";
 import { PRODUCTS } from "../purchases/products";
-import { borderRadius, colors, shadows } from "../theme/colors";
+import { useTheme } from "../theme/theme";
+import { useAuth } from "../state/AuthProvider";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Paywall">;
 
 export function PaywallScreen({ navigation }: Props) {
   const iap = useIap();
+  const { user } = useAuth();
+  const { colors, shadows, borderRadius } = useTheme();
+  const styles = useMemo(() => makeStyles(colors, shadows, borderRadius), [colors, shadows, borderRadius]);
   const [selected, setSelected] = useState<"annual" | "monthly">("annual");
+  const isAnonymous = Boolean((user as any)?.is_anonymous) || (user as any)?.app_metadata?.provider === "anonymous";
 
   const annual = iap.products[PRODUCTS.premium_annual];
   const monthly = iap.products[PRODUCTS.premium_monthly];
@@ -32,6 +37,10 @@ export function PaywallScreen({ navigation }: Props) {
 
   const buy = async () => {
     try {
+      if (isAnonymous) {
+        navigation.replace("UpgradeAccount", { postUpgradeTo: "Paywall" });
+        return;
+      }
       await iap.buy(ctaProduct);
       Alert.alert("Success", "WordCrack Premium is now active.");
       navigation.goBack();
@@ -42,6 +51,10 @@ export function PaywallScreen({ navigation }: Props) {
 
   const restore = async () => {
     try {
+      if (isAnonymous) {
+        navigation.replace("UpgradeAccount", { postUpgradeTo: "Paywall" });
+        return;
+      }
       await iap.restore();
       Alert.alert("Restored", "Your purchases have been synced.");
       navigation.goBack();
@@ -61,6 +74,22 @@ export function PaywallScreen({ navigation }: Props) {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
+        {isAnonymous ? (
+          <View style={styles.guestGate}>
+            <Text style={styles.guestGateTitle}>Create an account to subscribe</Text>
+            <Text style={styles.guestGateText}>
+              You’re currently playing as a guest. Create an account first, then you can start WordCrack Premium.
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => navigation.replace("UpgradeAccount", { postUpgradeTo: "Paywall" })}
+              style={({ pressed }) => [styles.guestGateButton, pressed && { opacity: 0.92 }]}
+            >
+              <Text style={styles.guestGateButtonText}>Create account</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         <View style={styles.hero}>
           <Text style={styles.heroIcon}>⭐</Text>
           <Text style={styles.heroTitle}>Upgrade to WordCrack Premium</Text>
@@ -220,7 +249,7 @@ export function PaywallScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: any, shadows: any, borderRadius: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background.main },
   topBar: {
     flexDirection: "row",
@@ -239,6 +268,26 @@ const styles = StyleSheet.create({
   backText: { fontSize: 28, fontWeight: "900", color: colors.text.primary, marginTop: -2 },
   topTitle: { flex: 1, textAlign: "center", fontWeight: "900", color: colors.text.primary, fontSize: 16 },
   content: { padding: 16, paddingBottom: 28, gap: 14 },
+
+  guestGate: {
+    backgroundColor: colors.background.card,
+    borderRadius: borderRadius.xl,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "rgba(26, 115, 232, 0.25)",
+    ...shadows.small,
+  },
+  guestGateTitle: { fontSize: 16, fontWeight: "900", color: colors.text.primary, marginBottom: 6 },
+  guestGateText: { color: colors.text.secondary, lineHeight: 20, marginBottom: 12 },
+  guestGateButton: {
+    backgroundColor: colors.primary.blue,
+    borderRadius: borderRadius.large,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    alignItems: "center",
+    ...shadows.small,
+  },
+  guestGateButtonText: { color: colors.text.light, fontWeight: "900", fontSize: 16 },
 
   hero: {
     backgroundColor: colors.primary.darkBlue,

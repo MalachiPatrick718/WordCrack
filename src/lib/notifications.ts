@@ -2,6 +2,8 @@ import * as Notifications from "expo-notifications";
 import { getJson, setJson } from "./storage";
 
 const KEY = "wordcrack:dailyReminder";
+const TEST_PUZZLE_INTERVAL_SECONDS = 120;
+const HOURLY_SECONDS = 60 * 60;
 
 type Stored = {
   enabled: boolean;
@@ -17,24 +19,44 @@ export async function enableDailyReminder(hour = 9, minute = 0): Promise<void> {
     if (req.status !== "granted") throw new Error("Notifications permission not granted");
   }
 
+  // Android requires a channel for notifications to appear consistently.
+  await Notifications.setNotificationChannelAsync("default", {
+    name: "Default",
+    importance: Notifications.AndroidImportance.DEFAULT,
+  }).catch(() => undefined);
+
   // Cancel previous scheduled reminder if any
   const prev = await getJson<Stored>(KEY);
   if (prev?.notificationId) {
     await Notifications.cancelScheduledNotificationAsync(prev.notificationId).catch(() => undefined);
   }
 
-  const notificationId = await Notifications.scheduleNotificationAsync({
-    content: {
-      title: "WordCrack",
-      body: "Today's puzzle is ready. Can you crack it faster?",
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
-      hour,
-      minute,
-      repeats: true,
-    },
-  });
+  const isTest = typeof __DEV__ !== "undefined" && __DEV__;
+  const notificationId = await Notifications.scheduleNotificationAsync(
+    isTest
+      ? {
+          content: {
+            title: "New WordCrack Puzzle Available",
+            body: "A new puzzle is ready. Tap to play.",
+          },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+            seconds: TEST_PUZZLE_INTERVAL_SECONDS,
+            repeats: true,
+          },
+        }
+      : {
+          content: {
+            title: "New WordCrack Puzzle Available",
+            body: "A new puzzle is ready. Tap to play.",
+          },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+            seconds: HOURLY_SECONDS,
+            repeats: true,
+          },
+        },
+  );
 
   await setJson(KEY, { enabled: true, notificationId, hour, minute });
 }

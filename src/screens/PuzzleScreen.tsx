@@ -2,15 +2,19 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, Text, View, StyleSheet } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../AppRoot";
-import { getPracticePuzzle, getTodayPuzzle, startAttempt, submitAttempt, useHint, type HintType } from "../lib/api";
+import { getPracticePuzzle, getTodayPuzzle, giveUpAttempt, startAttempt, submitAttempt, useHint, type HintType } from "../lib/api";
 import { setJson } from "../lib/storage";
-import { colors, shadows, borderRadius } from "../theme/colors";
+import { useTheme } from "../theme/theme";
 import { IncorrectModal } from "../components/IncorrectModal";
 import { SuccessModal } from "../components/SuccessModal";
 import { HintModal } from "../components/HintModal";
 import { HintPickerModal } from "../components/HintPickerModal";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Puzzle">;
+
+// Hourly puzzles are governed by server time; do not restart timers client-side.
+const WORD_LEN = 5;
+const PLACEHOLDER = "—".repeat(WORD_LEN);
 
 function formatMs(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -22,11 +26,15 @@ function formatMs(ms: number): string {
 
 export function PuzzleScreen({ navigation, route }: Props) {
   const mode = route.params.mode;
+  const { colors, shadows, borderRadius } = useTheme();
+  const styles = useMemo(() => makeStyles(colors, shadows, borderRadius), [colors, shadows, borderRadius]);
 
   const [loading, setLoading] = useState(true);
   const [puzzleId, setPuzzleId] = useState<string | null>(null);
   const [cipherWord, setCipherWord] = useState<string>("");
   const [letterSets, setLetterSets] = useState<string[][]>([]);
+  const [startIdxs, setStartIdxs] = useState<number[] | null>(null);
+  const [themeHint, setThemeHint] = useState<string | null>(null);
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [penaltyMs, setPenaltyMs] = useState(0);
   const [hintsUsedCount, setHintsUsedCount] = useState(0);
@@ -49,6 +57,7 @@ export function PuzzleScreen({ navigation, route }: Props) {
 
   const [started, setStarted] = useState(false);
   const [paused, setPaused] = useState(false);
+  const attemptLockedRef = useRef(false);
   const startedAtLocalRef = useRef<number>(0);
   const pausedAtRef = useRef<number>(0);
   const pausedTotalRef = useRef<number>(0);
@@ -63,10 +72,15 @@ export function PuzzleScreen({ navigation, route }: Props) {
     let mounted = true;
     (async () => {
       try {
+        // If the user has started an attempt, never swap the puzzle out from under them.
+        // (Even if the global 2-minute slot rolls over, they should finish the puzzle they started.)
+        if (attemptLockedRef.current) return;
+
         setLoading(true);
         // Load puzzle, but don't start attempt/timer until user presses Start.
         setStarted(false);
         setPaused(false);
+        attemptLockedRef.current = false;
         startedAtLocalRef.current = 0;
         pausedAtRef.current = 0;
         pausedTotalRef.current = 0;
@@ -80,6 +94,8 @@ export function PuzzleScreen({ navigation, route }: Props) {
         setPuzzleId(puzzle.id);
         setCipherWord(puzzle.cipher_word);
         setLetterSets(puzzle.letter_sets);
+        setStartIdxs(Array.isArray((puzzle as any).start_idxs) ? ((puzzle as any).start_idxs as number[]) : null);
+        setThemeHint(puzzle.theme_hint ?? null);
         await setJson(mode === "practice" ? "wordcrack:practicePuzzleCache" : "wordcrack:todayPuzzleCache", puzzle);
       } catch (e: any) {
         Alert.alert("Can't start puzzle", e?.message ?? "Unknown error", [{ text: "OK", onPress: () => navigation.goBack() }]);
@@ -90,7 +106,9 @@ export function PuzzleScreen({ navigation, route }: Props) {
     return () => {
       mounted = false;
     };
-  }, [mode, navigation]);
+    // Intentionally not depending on `navigation`: the navigation object identity can change and
+    // we never want that to trigger a puzzle reload mid-attempt.
+  }, [mode]);
 
   const elapsedMs = useMemo(() => {
     if (!started || !startedAtLocalRef.current) return 0;
@@ -99,9 +117,9 @@ export function PuzzleScreen({ navigation, route }: Props) {
   }, [now, started, paused]);
 
   // Start blank (no pre-selected letters)
-  const [idxs, setIdxs] = useState<(number | null)[]>([null, null, null, null, null, null]);
+  const [idxs, setIdxs] = useState<(number | null)[]>(Array.from({ length: WORD_LEN }, () => null));
   useEffect(() => {
-    setIdxs([null, null, null, null, null, null]);
+    setIdxs(Array.from({ length: WORD_LEN }, () => null));
   }, [cipherWord]);
 
   const getSelectedLetter = (col: number): string | null => {
@@ -112,7 +130,7 @@ export function PuzzleScreen({ navigation, route }: Props) {
   };
 
   const guessWord = useMemo(() => {
-    if (letterSets.length !== 6) return "";
+    if (letterSets.length !== WORD_LEN) return "";
     const letters = letterSets.map((_, i) => getSelectedLetter(i));
     if (letters.some((l) => l == null)) return "";
     return (letters as string[]).join("");
@@ -150,18 +168,23 @@ export function PuzzleScreen({ navigation, route }: Props) {
       setHintsUsedCount(Array.isArray(attempt.hints_used) ? attempt.hints_used.length : 0);
 
       // Populate boxes with a random starting letter (not blank)
-      const nextIdxs = letterSets.map((set) => {
-        const len = set?.length ?? 0;
-        if (len <= 0) return 0;
-        return Math.floor(Math.random() * len);
-      });
-      setIdxs(nextIdxs.map((n) => (Number.isFinite(n) ? n : 0)));
+      if (Array.isArray(startIdxs) && startIdxs.length === WORD_LEN) {
+        setIdxs(startIdxs.map((n) => (Number.isFinite(n) ? Math.max(0, Math.min(4, n)) : 0)));
+      } else {
+        const nextIdxs = letterSets.map((set) => {
+          const len = set?.length ?? 0;
+          if (len <= 0) return 0;
+          return Math.floor(Math.random() * len);
+        });
+        setIdxs(nextIdxs.map((n) => (Number.isFinite(n) ? n : 0)));
+      }
 
       pausedTotalRef.current = 0;
       pausedAtRef.current = 0;
       startedAtLocalRef.current = Date.now();
       setPaused(false);
       setStarted(true);
+      attemptLockedRef.current = true;
     } catch (e: any) {
       Alert.alert("Can't start puzzle", e?.message ?? "Unknown error");
     } finally {
@@ -233,11 +256,53 @@ export function PuzzleScreen({ navigation, route }: Props) {
     }
   };
 
+  const giveUp = () => {
+    const hasActive = Boolean(attemptId) && started;
+    Alert.alert(
+      "Give up?",
+      hasActive
+        ? "This will reveal the word. You won’t be added to the leaderboard. Are you sure?"
+        : "Are you sure you want to leave this puzzle?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Give Up",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              if (attemptId) {
+                const res = await giveUpAttempt(attemptId);
+                Alert.alert("Word revealed", `The word was ${res.target_word}.`, [
+                  {
+                    text: "OK",
+                    onPress: async () => {
+                      attemptLockedRef.current = false;
+                      navigation.reset({ index: 0, routes: [{ name: "Home" }] });
+                    },
+                  },
+                ]);
+                return;
+              }
+            } catch (e: any) {
+              Alert.alert("Give up failed", e?.message ?? "Unknown error");
+              return;
+            }
+
+            attemptLockedRef.current = false;
+            navigation.goBack();
+          },
+        },
+      ],
+    );
+  };
+
   const handleSuccessContinue = () => {
     if (!successData) return;
     setShowSuccess(false);
+    attemptLockedRef.current = false;
     navigation.replace("Results", {
       attemptId: successData.attemptId,
+      mode,
       solve_time_ms: successData.solve_time_ms,
       penalty_ms: successData.penalty_ms,
       final_time_ms: successData.final_time_ms,
@@ -248,11 +313,16 @@ export function PuzzleScreen({ navigation, route }: Props) {
 
   return (
     <View style={styles.container}>
-      {/* Cipher Word Display */}
+      {/* Ciphered Word Display */}
       <View style={styles.cipherContainer}>
-        <Text style={styles.cipherLabel}>Cipher Word</Text>
+        <Text style={styles.cipherLabel}>Ciphered Word</Text>
+        {themeHint ? (
+          <View style={styles.themePill}>
+            <Text style={styles.themePillText}>Theme: {themeHint}</Text>
+          </View>
+        ) : null}
         <View style={styles.cipherTiles}>
-          {(cipherWord || "------").split("").map((letter, i) => (
+          {(cipherWord || PLACEHOLDER).split("").slice(0, WORD_LEN).map((letter, i) => (
             <View key={i} style={[styles.cipherTile, { backgroundColor: colors.tiles[i % colors.tiles.length] }]}>
               <Text style={styles.cipherLetter}>{letter}</Text>
             </View>
@@ -287,23 +357,36 @@ export function PuzzleScreen({ navigation, route }: Props) {
               <Text style={styles.startButtonText}>Start</Text>
             </Pressable>
           ) : (
-            <Pressable
-              accessibilityRole="button"
-              onPress={togglePause}
-              style={({ pressed }) => [
-                styles.pauseButton,
-                pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
-              ]}
-            >
-              <Text style={styles.pauseButtonText}>{paused ? "Resume" : "Pause"}</Text>
-            </Pressable>
+            <View style={styles.timerActionsRow}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={togglePause}
+                style={({ pressed }) => [
+                  styles.pauseButton,
+                  pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
+                ]}
+              >
+                <Text style={styles.pauseButtonText}>{paused ? "Resume" : "Pause"}</Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                onPress={giveUp}
+                style={({ pressed }) => [
+                  styles.giveUpButton,
+                  pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] },
+                ]}
+              >
+                <Text style={styles.giveUpButtonText}>Give Up</Text>
+              </Pressable>
+            </View>
           )}
         </View>
       </View>
 
       {/* Letter Columns */}
       <View style={styles.columnsContainer}>
-        {Array.from({ length: 6 }, (_, col) => {
+        {Array.from({ length: WORD_LEN }, (_, col) => {
           const sel = getSelectedLetter(col);
           const cur = started ? (sel ?? "?") : "—";
           const hasSelection = sel !== null;
@@ -353,14 +436,6 @@ export function PuzzleScreen({ navigation, route }: Props) {
             </View>
           );
         })}
-      </View>
-
-      {/* Current Guess Display */}
-      <View style={styles.guessContainer}>
-        <Text style={styles.guessLabel}>Your Answer</Text>
-        <Text style={[styles.guessWord, !allSelected && { color: colors.text.muted }]}>
-          {guessWord || "------"}
-        </Text>
       </View>
 
       {/* Action Buttons */}
@@ -425,7 +500,12 @@ export function PuzzleScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(
+  colors: any,
+  shadows: any,
+  borderRadius: any,
+) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background.main,
@@ -441,20 +521,34 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     marginBottom: 8,
   },
+  themePill: {
+    marginBottom: 10,
+    backgroundColor: colors.background.card,
+    borderWidth: 1,
+    borderColor: colors.ui.border,
+    borderRadius: borderRadius.round,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  themePillText: {
+    color: colors.text.primary,
+    fontWeight: "700",
+    fontSize: 13,
+  },
   cipherTiles: {
     flexDirection: "row",
     gap: 6,
   },
   cipherTile: {
-    width: 46,
-    height: 46,
+    width: 66,
+    height: 66,
     borderRadius: borderRadius.medium,
     alignItems: "center",
     justifyContent: "center",
     ...shadows.small,
   },
   cipherLetter: {
-    fontSize: 24,
+    fontSize: 36,
     fontWeight: "800",
     color: colors.text.light,
   },
@@ -497,6 +591,10 @@ const styles = StyleSheet.create({
   timerActions: {
     marginTop: 14,
   },
+  timerActionsRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
   startButton: {
     backgroundColor: colors.button.submit,
     borderRadius: borderRadius.large,
@@ -515,9 +613,23 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: "center",
     ...shadows.small,
+    flex: 1,
   },
   pauseButtonText: {
     color: colors.primary.darkBlue,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  giveUpButton: {
+    backgroundColor: colors.primary.red,
+    borderRadius: borderRadius.large,
+    paddingVertical: 12,
+    alignItems: "center",
+    ...shadows.small,
+    flex: 1,
+  },
+  giveUpButtonText: {
+    color: colors.text.light,
     fontSize: 18,
     fontWeight: "900",
   },
@@ -553,29 +665,11 @@ const styles = StyleSheet.create({
     ...shadows.medium,
   },
   letterText: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: "800",
     color: colors.text.light,
   },
-  guessContainer: {
-    backgroundColor: colors.background.card,
-    borderRadius: borderRadius.large,
-    padding: 16,
-    alignItems: "center",
-    marginBottom: 16,
-    ...shadows.small,
-  },
-  guessLabel: {
-    fontSize: 12,
-    color: colors.text.secondary,
-    marginBottom: 6,
-  },
-  guessWord: {
-    fontSize: 32,
-    fontWeight: "800",
-    color: colors.primary.darkBlue,
-    letterSpacing: 4,
-  },
+  // (Removed "Your Answer" section)
   actions: {
     flexDirection: "row",
     gap: 12,
@@ -619,4 +713,5 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: colors.text.light,
   },
-});
+  });
+}

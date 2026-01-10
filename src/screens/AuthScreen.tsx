@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View, StyleSheet } from "react-native";
 import { useAuth } from "../state/AuthProvider";
-import { colors, shadows, borderRadius } from "../theme/colors";
+import { useTheme } from "../theme/theme";
 
 const RESEND_COOLDOWN_MS = 30_000;
 
 export function AuthScreen() {
   const { signInGuest, signInWithEmailOtp, verifyEmailOtp } = useAuth();
+  const { colors, shadows, borderRadius } = useTheme();
+  const styles = useMemo(() => makeStyles(colors, shadows, borderRadius), [colors, shadows, borderRadius]);
   const [email, setEmail] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [token, setToken] = useState("");
@@ -73,11 +75,13 @@ export function AuthScreen() {
       style={styles.container}
     >
       {/* Logo */}
-      <Image
-        source={require("../../assets/icon.png")}
-        style={styles.logo}
-        resizeMode="contain"
-      />
+      <View style={styles.logoCard}>
+        <Image
+          source={require("../../assets/icon.png")}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+      </View>
 
       {/* Welcome Card */}
       <View style={styles.card}>
@@ -191,7 +195,8 @@ export function AuthScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: any, shadows: any, borderRadius: any) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background.main,
@@ -203,6 +208,13 @@ const styles = StyleSheet.create({
     height: 110,
     alignSelf: "center",
     marginBottom: 24,
+  },
+  logoCard: {
+    alignSelf: "center",
+    backgroundColor: "transparent",
+    borderRadius: 0,
+    padding: 0,
+    marginBottom: 14,
   },
   card: {
     backgroundColor: colors.background.card,
@@ -316,4 +328,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
   },
-});
+  });
+}

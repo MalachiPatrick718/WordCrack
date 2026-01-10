@@ -22,13 +22,13 @@ Deno.serve(async (req) => {
     const attempt_id = String(body?.attempt_id ?? "");
     const guess_word = String(body?.guess_word ?? "");
     if (!attempt_id) return json({ error: "Missing attempt_id" }, { status: 400, headers: corsHeaders });
-    assertUpperAlpha(guess_word, 6);
+    assertUpperAlpha(guess_word, 5);
 
     const admin = supabaseAdmin();
 
     const { data: attempt, error: attemptErr } = await admin
       .from("attempts")
-      .select("id,user_id,puzzle_id,mode,started_at,is_completed,penalty_ms,completed_at,solve_time_ms,final_time_ms,hints_used")
+      .select("id,user_id,puzzle_id,mode,started_at,is_completed,penalty_ms,completed_at,solve_time_ms,final_time_ms,hints_used,gave_up")
       .eq("id", attempt_id)
       .maybeSingle();
     if (attemptErr) return json({ error: attemptErr.message }, { status: 500, headers: corsHeaders });
@@ -36,6 +36,10 @@ Deno.serve(async (req) => {
     if (attempt.user_id !== user.id) return json({ error: "Forbidden" }, { status: 403, headers: corsHeaders });
 
     if (attempt.is_completed) {
+      // If the user previously gave up, they can't submit this attempt.
+      if ((attempt as any).gave_up) {
+        return json({ error: "Attempt was given up" }, { status: 400, headers: corsHeaders });
+      }
       // Idempotent response for already-completed attempts
       return json({ correct: true, attempt }, { headers: corsHeaders });
     }

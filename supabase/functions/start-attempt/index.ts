@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
     // Validate puzzle + mode rules
     const { data: puzzle, error: puzzleErr } = await admin
       .from("puzzles")
-      .select("id,puzzle_date")
+      .select("id,puzzle_date,puzzle_hour,kind")
       .eq("id", puzzle_id)
       .maybeSingle();
     if (puzzleErr) return json({ error: puzzleErr.message }, { status: 500, headers: corsHeaders });
@@ -35,23 +35,33 @@ Deno.serve(async (req) => {
 
     if (mode === "daily") {
       const today = getUtcDateString();
+      if (puzzle.kind !== "daily") {
+        return json({ error: "Daily attempts can only be started for daily puzzles" }, { status: 400, headers: corsHeaders });
+      }
       if (String(puzzle.puzzle_date) !== today) {
         return json({ error: "Daily attempts can only be started for today's puzzle" }, { status: 400, headers: corsHeaders });
       }
+    } else {
+      if (puzzle.kind !== "practice") {
+        return json({ error: "Practice attempts can only be started for practice puzzles" }, { status: 400, headers: corsHeaders });
+      }
     }
 
-    // If there's an existing attempt (daily uniqueness), return it.
-    const { data: existing, error: existingErr } = await admin
-      .from("attempts")
-      .select("id,user_id,puzzle_id,mode,started_at,completed_at,solve_time_ms,penalty_ms,final_time_ms,hints_used,is_completed")
-      .eq("user_id", user.id)
-      .eq("puzzle_id", puzzle_id)
-      .eq("mode", mode)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (existingErr) return json({ error: existingErr.message }, { status: 500, headers: corsHeaders });
-    if (existing) return json({ attempt: existing }, { headers: corsHeaders });
+    // Daily: if there's an existing attempt (uniqueness), return it.
+    // Practice: always create a fresh attempt so players can replay and practice freely.
+    if (mode === "daily") {
+      const { data: existing, error: existingErr } = await admin
+        .from("attempts")
+        .select("id,user_id,puzzle_id,mode,started_at,completed_at,solve_time_ms,penalty_ms,final_time_ms,hints_used,is_completed")
+        .eq("user_id", user.id)
+        .eq("puzzle_id", puzzle_id)
+        .eq("mode", mode)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (existingErr) return json({ error: existingErr.message }, { status: 500, headers: corsHeaders });
+      if (existing) return json({ attempt: existing }, { headers: corsHeaders });
+    }
 
     const { data: created, error: createErr } = await admin
       .from("attempts")

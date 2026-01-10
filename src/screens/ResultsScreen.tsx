@@ -1,9 +1,9 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, Share, Text, View, StyleSheet } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../AppRoot";
-import { colors, shadows, borderRadius } from "../theme/colors";
-import { enableDailyReminder } from "../lib/notifications";
+import { useTheme } from "../theme/theme";
+import { enableDailyReminder, getDailyReminderState } from "../lib/notifications";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Results">;
 
@@ -16,7 +16,22 @@ function fmtMs(ms: number): string {
 }
 
 export function ResultsScreen({ navigation, route }: Props) {
-  const { solve_time_ms, penalty_ms, final_time_ms, hints_used_count, rank } = route.params;
+  const { colors, shadows, borderRadius } = useTheme();
+  const styles = useMemo(() => makeStyles(colors, shadows, borderRadius), [colors, shadows, borderRadius]);
+  const { solve_time_ms, penalty_ms, final_time_ms, hints_used_count, rank, mode } = route.params;
+  const [reminderEnabled, setReminderEnabled] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    getDailyReminderState()
+      .then((s) => {
+        if (mounted) setReminderEnabled(Boolean(s.enabled));
+      })
+      .catch(() => undefined);
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const share = async () => {
     try {
@@ -104,21 +119,40 @@ export function ResultsScreen({ navigation, route }: Props) {
 
         <Pressable
           accessibilityRole="button"
-          onPress={async () => {
-            try {
-              await enableDailyReminder();
-              Alert.alert("Daily reminder enabled", "We’ll remind you every day at 9:00 AM (local time). You can turn this off in Settings.");
-            } catch (e: any) {
-              Alert.alert("Couldn't enable reminder", e?.message ?? "Unknown error");
-            }
-          }}
+          onPress={() => navigation.navigate("Leaderboards")}
           style={({ pressed }) => [
-            styles.reminderButton,
+            styles.leaderboardButton,
             pressed && { opacity: 0.9 },
           ]}
         >
-          <Text style={styles.reminderButtonText}>🔔 Enable Daily Reminder</Text>
+          <Text style={styles.leaderboardButtonText}>🏆 View Leaderboard</Text>
         </Pressable>
+
+        {!reminderEnabled ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={async () => {
+              try {
+                await enableDailyReminder();
+                setReminderEnabled(true);
+                Alert.alert(
+                  "Hourly reminders enabled",
+                  (typeof __DEV__ !== "undefined" && __DEV__)
+                    ? "Testing mode: you’ll get a notification every 2 minutes. You can turn this off in Settings."
+                    : "We’ll notify you when a new hourly puzzle is available. You can turn this off in Settings.",
+                );
+              } catch (e: any) {
+                Alert.alert("Couldn't enable reminder", e?.message ?? "Unknown error");
+              }
+            }}
+            style={({ pressed }) => [
+              styles.reminderButton,
+              pressed && { opacity: 0.9 },
+            ]}
+          >
+            <Text style={styles.reminderButtonText}>🔔 Enable Hourly Reminders</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <View style={{ flex: 1 }} />
@@ -126,12 +160,12 @@ export function ResultsScreen({ navigation, route }: Props) {
       {/* Home Button */}
       <Pressable
         accessibilityRole="button"
-        onPress={() =>
+        onPress={async () => {
           navigation.reset({
             index: 0,
             routes: [{ name: "Home" }],
-          })
-        }
+          });
+        }}
         style={({ pressed }) => [
           styles.homeButton,
           pressed && { opacity: 0.9 },
@@ -143,7 +177,8 @@ export function ResultsScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: any, shadows: any, borderRadius: any) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background.main,
@@ -249,6 +284,18 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.text.light,
   },
+  leaderboardButton: {
+    backgroundColor: colors.primary.darkBlue,
+    borderRadius: borderRadius.large,
+    padding: 16,
+    alignItems: "center",
+    ...shadows.small,
+  },
+  leaderboardButtonText: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: colors.text.light,
+  },
   reminderButton: {
     backgroundColor: colors.background.card,
     borderWidth: 2,
@@ -274,4 +321,5 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: colors.text.light,
   },
-});
+  });
+}

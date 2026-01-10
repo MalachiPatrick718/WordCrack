@@ -3,7 +3,7 @@ import { handleCors, corsHeaders } from "../_shared/cors.ts";
 import { supabaseAdmin } from "../_shared/supabase.ts";
 import { getUtcDateString, json } from "../_shared/utils.ts";
 
-function getUtcHour(now = new Date()): number {
+function getPuzzleSlot(now = new Date()): number {
   return now.getUTCHours();
 }
 
@@ -15,10 +15,10 @@ Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
     const date = url.searchParams.get("date") ?? getUtcDateString();
-    const hourParam = url.searchParams.get("hour");
-    const hour = hourParam == null ? getUtcHour() : Number(hourParam);
-    if (!Number.isFinite(hour) || hour < 0 || hour > 23) {
-      return json({ error: "Invalid hour (expected 0-23)" }, { status: 400, headers: corsHeaders });
+    const slotParam = url.searchParams.get("slot") ?? url.searchParams.get("hour");
+    const slot = slotParam == null ? getPuzzleSlot() : Number(slotParam);
+    if (!Number.isFinite(slot) || slot < 0 || slot > 23) {
+      return json({ error: "Invalid slot (expected 0-23)" }, { status: 400, headers: corsHeaders });
     }
     const limit = Math.min(200, Math.max(1, Number(url.searchParams.get("limit") ?? "100")));
 
@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
       .from("daily_leaderboard")
       .select("puzzle_date,puzzle_hour,puzzle_id,user_id,username,avatar_url,final_time_ms,penalty_ms,hints_used_count")
       .eq("puzzle_date", date)
-      .eq("puzzle_hour", hour)
+      .eq("puzzle_hour", slot)
       .order("final_time_ms", { ascending: true })
       .limit(limit);
     if (error) return json({ error: error.message }, { status: 500, headers: corsHeaders });
@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
       return { ...e, is_premium };
     });
 
-    return json({ date, hour, entries }, { headers: corsHeaders });
+    return json({ date, slot, entries }, { headers: corsHeaders });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     return json({ error: msg }, { status: 500, headers: corsHeaders });

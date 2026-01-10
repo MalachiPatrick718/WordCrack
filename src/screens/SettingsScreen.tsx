@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, Switch, Text, TextInput, View, StyleSheet } from "react-native";
+import { Alert, Pressable, ScrollView, Switch, Text, View, StyleSheet } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Notifications from "expo-notifications";
 import { getJson, setJson } from "../lib/storage";
@@ -7,7 +7,7 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../state/AuthProvider";
 import { useIap } from "../purchases/IapProvider";
 import { PRODUCTS } from "../purchases/products";
-import { colors, shadows, borderRadius } from "../theme/colors";
+import { useTheme, type ThemePreference } from "../theme/theme";
 import { disableDailyReminder, enableDailyReminder, getDailyReminderState } from "../lib/notifications";
 import { RootStackParamList } from "../AppRoot";
 
@@ -20,11 +20,10 @@ type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
 export function SettingsScreen({ navigation }: Props) {
   const { user, signOut } = useAuth();
   const iap = useIap();
+  const { colors, shadows, borderRadius, preference, setPreference } = useTheme();
+  const styles = useMemo(() => makeStyles(colors, shadows, borderRadius), [colors, shadows, borderRadius]);
   const [prefs, setPrefs] = useState<Prefs>({ pushEnabled: false });
   const [inviteCode, setInviteCode] = useState<string | null>(null);
-  const [upgradeEmail, setUpgradeEmail] = useState("");
-  const [upgradeCode, setUpgradeCode] = useState("");
-  const [upgradeStep, setUpgradeStep] = useState<"idle" | "sent">("idle");
 
   useEffect(() => {
     getJson<Prefs>("wordcrack:prefs").then((v) => v && setPrefs(v));
@@ -75,6 +74,36 @@ export function SettingsScreen({ navigation }: Props) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      {/* Theme */}
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardIcon}>🎨</Text>
+          <Text style={styles.cardTitle}>Theme</Text>
+        </View>
+        <Text style={styles.cardDescription}>Choose Light, Dark, or follow your device setting.</Text>
+        <View style={styles.themeRow}>
+          {(["system", "light", "dark"] as ThemePreference[]).map((opt) => {
+            const active = preference === opt;
+            return (
+              <Pressable
+                key={opt}
+                accessibilityRole="button"
+                onPress={() => setPreference(opt)}
+                style={({ pressed }) => [
+                  styles.themePill,
+                  active && styles.themePillActive,
+                  pressed && { opacity: 0.9 },
+                ]}
+              >
+                <Text style={[styles.themePillText, active && styles.themePillTextActive]}>
+                  {opt === "system" ? "System" : opt === "light" ? "Light" : "Dark"}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
       {/* Profile Section */}
       {!isAnonymous ? (
         <View style={styles.card}>
@@ -143,7 +172,7 @@ export function SettingsScreen({ navigation }: Props) {
           <Text style={styles.cardTitle}>Notifications</Text>
         </View>
         <View style={styles.settingRow}>
-          <Text style={styles.settingLabel}>Daily reminder</Text>
+          <Text style={styles.settingLabel}>Hourly reminders</Text>
           <Switch
             value={prefs.pushEnabled}
             onValueChange={togglePush}
@@ -152,7 +181,7 @@ export function SettingsScreen({ navigation }: Props) {
           />
         </View>
         <Text style={styles.settingHint}>
-          Get notified when the daily puzzle is available.
+          Get notified when a new puzzle is available.
         </Text>
       </View>
 
@@ -167,55 +196,13 @@ export function SettingsScreen({ navigation }: Props) {
             <Text style={styles.cardDescription}>
               You’re playing as a guest. Upgrade to keep your progress across devices.
             </Text>
-            <View style={{ gap: 10 }}>
-              <TextInput
-                placeholder="Email address"
-                autoCapitalize="none"
-                keyboardType="email-address"
-                value={upgradeEmail}
-                onChangeText={setUpgradeEmail}
-                style={styles.input}
-              />
-              {upgradeStep === "sent" ? (
-                <TextInput
-                  placeholder="OTP code"
-                  keyboardType="number-pad"
-                  value={upgradeCode}
-                  onChangeText={setUpgradeCode}
-                  style={styles.input}
-                />
-              ) : null}
-              <Pressable
-                accessibilityRole="button"
-                onPress={async () => {
-                  try {
-                    const email = upgradeEmail.trim();
-                    if (!email) return;
-                    if (upgradeStep === "idle") {
-                      // Best-effort upgrade: attach email then send OTP.
-                      await supabase.auth.updateUser({ email });
-                      const { error } = await supabase.auth.signInWithOtp({ email });
-                      if (error) throw error;
-                      setUpgradeStep("sent");
-                      Alert.alert("Check your email", "Enter the code to complete account upgrade.");
-                    } else {
-                      const { error } = await supabase.auth.verifyOtp({ email, token: upgradeCode.trim(), type: "email" });
-                      if (error) throw error;
-                      setUpgradeStep("idle");
-                      setUpgradeCode("");
-                      Alert.alert("Upgraded!", "Your guest account is now linked to your email.");
-                    }
-                  } catch (e: any) {
-                    Alert.alert("Upgrade failed", e?.message ?? "Unknown error");
-                  }
-                }}
-                style={({ pressed }) => [styles.actionButton, pressed && { opacity: 0.9 }]}
-              >
-                <Text style={styles.actionButtonText}>
-                  {upgradeStep === "idle" ? "Send Upgrade Code" : "Verify & Upgrade"}
-                </Text>
-              </Pressable>
-            </View>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => navigation.navigate("UpgradeAccount", { postUpgradeTo: "Back" })}
+              style={({ pressed }) => [styles.actionButton, pressed && { opacity: 0.9 }]}
+            >
+              <Text style={styles.actionButtonText}>Create account</Text>
+            </Pressable>
           </>
         ) : (
           <Text style={styles.cardDescription}>Signed in.</Text>
@@ -238,7 +225,7 @@ export function SettingsScreen({ navigation }: Props) {
           {!iap.premium ? (
             <Pressable
               accessibilityRole="button"
-              onPress={() => navigation.navigate("Paywall")}
+              onPress={() => (isAnonymous ? navigation.navigate("UpgradeAccount", { postUpgradeTo: "Paywall" }) : navigation.navigate("Paywall"))}
               style={({ pressed }) => [
                 styles.premiumButton,
                 pressed && { opacity: 0.9 },
@@ -320,7 +307,7 @@ export function SettingsScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: any, shadows: any, borderRadius: any) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background.main,
@@ -355,6 +342,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     marginBottom: 16,
+  },
+  themeRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 10,
+  },
+  themePill: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: borderRadius.round,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.background.main,
+    borderWidth: 1,
+    borderColor: colors.ui.border,
+  },
+  themePillActive: {
+    backgroundColor: colors.primary.blue,
+    borderColor: colors.primary.blue,
+  },
+  themePillText: {
+    fontWeight: "800",
+    color: colors.text.primary,
+  },
+  themePillTextActive: {
+    color: colors.text.light,
   },
   inviteRow: {
     flexDirection: "row",

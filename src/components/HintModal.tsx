@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
-import { borderRadius, colors, shadows } from "../theme/colors";
+import { useTheme } from "../theme/theme";
 
 type Props = {
   visible: boolean;
@@ -10,6 +10,8 @@ type Props = {
 };
 
 export function HintModal({ visible, title = "Hint", message, onClose }: Props) {
+  const { colors, shadows, borderRadius } = useTheme();
+  const styles = useMemo(() => makeStyles(colors, shadows, borderRadius), [colors, shadows, borderRadius]);
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
@@ -32,7 +34,8 @@ export function HintModal({ visible, title = "Hint", message, onClose }: Props) 
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: any, shadows: any, borderRadius: any) {
+  return StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.6)",
@@ -86,5 +89,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "800",
   },
-});
+  });
+}
 

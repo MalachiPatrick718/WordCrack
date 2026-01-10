@@ -34,6 +34,7 @@ Deno.serve(async (req) => {
       .eq("user_id", user.id)
       .eq("mode", "daily")
       .eq("is_completed", true)
+      .eq("gave_up", false)
       .order("completed_at", { ascending: false })
       .limit(60);
     if (error) return json({ error: error.message }, { status: 500, headers: corsHeaders });

@@ -23,7 +23,7 @@
       "package": "com.wordcrack.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "transparent"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false

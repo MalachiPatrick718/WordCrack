@@ -1,17 +1,22 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, Text, View, StyleSheet } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { getMyStats } from "../lib/api";
 import { RootStackParamList } from "../AppRoot";
 import { useIap } from "../purchases/IapProvider";
-import { colors, shadows, borderRadius } from "../theme/colors";
+import { useTheme } from "../theme/theme";
+import { useAuth } from "../state/AuthProvider";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Stats">;
 
 export function StatsScreen({ navigation }: Props) {
   const iap = useIap();
+  const { user } = useAuth();
+  const { colors, shadows, borderRadius } = useTheme();
+  const styles = useMemo(() => makeStyles(colors, shadows, borderRadius), [colors, shadows, borderRadius]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<Awaited<ReturnType<typeof getMyStats>> | null>(null);
+  const isAnonymous = Boolean((user as any)?.is_anonymous) || (user as any)?.app_metadata?.provider === "anonymous";
 
   useEffect(() => {
     let mounted = true;
@@ -111,7 +116,7 @@ export function StatsScreen({ navigation }: Props) {
           ) : (
             <Pressable
               accessibilityRole="button"
-              onPress={() => navigation.navigate("Paywall")}
+              onPress={() => (isAnonymous ? navigation.navigate("UpgradeAccount", { postUpgradeTo: "Paywall" }) : navigation.navigate("Paywall"))}
               style={({ pressed }) => [styles.upgradeCard, pressed && { opacity: 0.92 }]}
             >
               <Text style={styles.upgradeTitle}>Unlock advanced stats</Text>
@@ -125,7 +130,8 @@ export function StatsScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: any, shadows: any, borderRadius: any) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background.main,
@@ -260,4 +266,5 @@ const styles = StyleSheet.create({
     color: colors.primary.yellow,
     fontWeight: "900",
   },
-});
+  });
+}

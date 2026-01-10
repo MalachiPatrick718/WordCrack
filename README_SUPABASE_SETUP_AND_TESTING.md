@@ -62,6 +62,38 @@ on conflict (id) do nothing;
 
 You must insert a puzzle for **today’s UTC date**.
 
+#### Recommended (Puzzle Bank)
+
+To keep `theme_hint` aligned with `target_word`, maintain a curated bank in `puzzle_bank.json`, then seed it into Supabase:
+
+```bash
+cd "WordCrack"
+SUPABASE_URL="https://<your-project-ref>.supabase.co" \
+SUPABASE_SERVICE_ROLE_KEY="<your service role key>" \
+npm run seed:puzzle-bank
+```
+
+After that, `get-today-puzzle` will automatically claim the next bank entry and generate:
+- `cipher_word` (random shift amount + some unshifted positions)
+- `letter_sets` (decoys + the correct letter)
+
+So you no longer need to run `admin-create-puzzle` for every new puzzle window.
+
+#### Optional (hands‑off): Daily auto‑replenish via GitHub Actions
+
+If you want **minimal involvement**, you can auto-add **30 new unique 5‑letter words** to Supabase daily (no file edits).
+
+This repo includes:
+- `WordCrack/scripts/replenish-puzzle-bank.js`
+- `.github/workflows/replenish_puzzle_bank.yml`
+
+Setup (GitHub):
+1. Repo → **Settings → Secrets and variables → Actions** → add:
+   - `SUPABASE_URL`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+2. The workflow runs daily at **03:00 UTC** (edit the cron in `.github/workflows/replenish_puzzle_bank.yml`).
+3. You can also run it manually: **Actions → Replenish WordCrack Puzzle Bank → Run workflow**.
+
 #### Recommended (admin function)
 
 Deploy `admin-create-puzzle`, set the secret `ADMIN_PUZZLE_KEY`, then create today’s puzzle like:

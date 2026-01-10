@@ -4,7 +4,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../AppRoot";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../state/AuthProvider";
-import { borderRadius, colors, shadows } from "../theme/colors";
+import { useTheme } from "../theme/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ProfileSetup">;
 
@@ -41,6 +41,8 @@ function avatarUrlForSeed(seed: string) {
 
 export function ProfileSetupScreen({ navigation, route }: Props) {
   const { user } = useAuth();
+  const { colors, shadows, borderRadius } = useTheme();
+  const styles = useMemo(() => makeStyles(colors, shadows, borderRadius), [colors, shadows, borderRadius]);
   const [username, setUsername] = useState(route.params?.initialUsername ?? "");
   const [selectedAvatarUrl, setSelectedAvatarUrl] = useState<string>(route.params?.initialAvatarUrl ?? avatarUrlForSeed(AVATAR_SEEDS[0]!));
   const [saving, setSaving] = useState(false);
@@ -152,7 +154,8 @@ export function ProfileSetupScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: any, shadows: any, borderRadius: any) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background.main,
@@ -228,5 +231,6 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     fontSize: 16,
   },
-});
+  });
+}
 

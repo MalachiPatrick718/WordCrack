@@ -1,8 +1,8 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../AppRoot";
-import { borderRadius, colors, shadows } from "../theme/colors";
+import { useTheme } from "../theme/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Legal">;
 
@@ -53,6 +53,8 @@ Contact
 `;
 
 export function LegalScreen({ route }: Props) {
+  const { colors, shadows, borderRadius } = useTheme();
+  const styles = useMemo(() => makeStyles(colors, shadows, borderRadius), [colors, shadows, borderRadius]);
   const doc = route.params.doc;
   const text = doc === "privacy" ? PRIVACY : TERMS;
   const title = doc === "privacy" ? "Privacy Policy" : "Terms of Service";
@@ -67,7 +69,7 @@ export function LegalScreen({ route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: any, shadows: any, borderRadius: any) => StyleSheet.create({
   content: {
     padding: 16,
     paddingBottom: 40,

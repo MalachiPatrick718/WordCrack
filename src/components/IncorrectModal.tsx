@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Modal, Pressable, Text, View, StyleSheet } from "react-native";
-import { colors, shadows, borderRadius } from "../theme/colors";
+import { useTheme } from "../theme/theme";
 
 type Props = {
   visible: boolean;
@@ -9,6 +9,8 @@ type Props = {
 };
 
 export function IncorrectModal({ visible, attemptsRemaining, onTryAgain }: Props) {
+  const { colors, shadows, borderRadius } = useTheme();
+  const styles = useMemo(() => makeStyles(colors, shadows, borderRadius), [colors, shadows, borderRadius]);
   return (
     <Modal
       visible={visible}
@@ -52,7 +54,8 @@ export function IncorrectModal({ visible, attemptsRemaining, onTryAgain }: Props
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: any, shadows: any, borderRadius: any) {
+  return StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.6)",
@@ -120,4 +123,5 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
   },
-});
+  });
+}
