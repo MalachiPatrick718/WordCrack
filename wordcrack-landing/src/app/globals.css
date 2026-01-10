@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+  height: 100%;
+}
+
+body {
+  color: white;
+  background:
+    radial-gradient(1150px 700px at 16% 10%, rgba(255, 217, 61, 0.28), transparent 60%),
+    radial-gradient(980px 640px at 82% 16%, rgba(74, 144, 217, 0.34), transparent 56%),
+    radial-gradient(980px 760px at 55% 96%, rgba(255, 217, 61, 0.18), transparent 58%),
+    radial-gradient(1200px 900px at 40% 92%, rgba(45, 90, 138, 0.28), transparent 60%),
+    linear-gradient(135deg, rgba(255, 217, 61, 0.10), rgba(74, 144, 217, 0.12)),
+    #0B1220;
+}
+
+::selection {
+  background: rgba(116, 192, 252, 0.35);
+}
+
