@@ -34,12 +34,43 @@ Deno.serve(async (req) => {
   if (req.method !== "GET") return json({ error: "Method not allowed" }, { status: 405, headers: corsHeaders });
 
   try {
-    await requireUser(req);
+    const user = await requireUser(req);
     const admin = supabaseAdmin();
     const today = getUtcDateString();
 
+    // Free users: limit practice to 5 puzzles per UTC day. Premium: unlimited.
+    const now = new Date();
+    const { data: ent } = await admin
+      .from("entitlements")
+      .select("premium_until")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const premiumUntil = ent?.premium_until ? new Date(ent.premium_until).getTime() : 0;
+    const isPremium = premiumUntil > now.getTime();
+
+    if (!isPremium) {
+      const start = new Date(`${today}T00:00:00Z`);
+      const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+      const { count, error: countErr } = await admin
+        .from("attempts")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("mode", "practice")
+        .gte("created_at", start.toISOString())
+        .lt("created_at", end.toISOString());
+      if (countErr) return json({ error: countErr.message }, { status: 500, headers: corsHeaders });
+      const used = count ?? 0;
+      const limit = 5;
+      if (used >= limit) {
+        return json(
+          { error: "Practice limit reached (5/day). Upgrade to Premium for unlimited practice.", code: "PRACTICE_LIMIT", limit, used },
+          { status: 402, headers: corsHeaders },
+        );
+      }
+    }
+
     // Claim from the curated puzzle bank so theme always matches target word.
-    const { data: claimed, error: claimErr } = await admin.rpc("claim_puzzle_bank_entry");
+    const { data: claimed, error: claimErr } = await admin.rpc("claim_puzzle_bank_entry", { p_kind: "practice" });
     if (claimErr) return json({ error: claimErr.message }, { status: 500, headers: corsHeaders });
     const picked = Array.isArray(claimed) ? claimed[0] : null;
     if (!picked) return json({ error: "Puzzle bank is empty" }, { status: 500, headers: corsHeaders });

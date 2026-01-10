@@ -1,13 +1,162 @@
 [
-  { "target_word": "PLANT", "theme_hint": "Common category" },
-  { "target_word": "CROWN", "theme_hint": "Symbolic" },
-  { "target_word": "SHELF", "theme_hint": "Everyday object" },
-  { "target_word": "TRAIL", "theme_hint": "A way through" },
-  { "target_word": "BRICK", "theme_hint": "Made thing" },
-  { "target_word": "MERCY", "theme_hint": "Abstract" },
-  { "target_word": "VAPOR", "theme_hint": "In the air" },
-  { "target_word": "SPICE", "theme_hint": "In the mix" },
-  { "target_word": "FLINT", "theme_hint": "Hard material" },
-  { "target_word": "SCALE", "theme_hint": "Measure or model" }
+  {
+    "target_word": "PLANT",
+    "theme_hint": "Botany"
+  },
+  {
+    "target_word": "CROWN",
+    "theme_hint": "Royal symbol"
+  },
+  {
+    "target_word": "SHELF",
+    "theme_hint": "Storage surface"
+  },
+  {
+    "target_word": "TRAIL",
+    "theme_hint": "Footpath"
+  },
+  {
+    "target_word": "BRICK",
+    "theme_hint": "Building block"
+  },
+  {
+    "target_word": "MERCY",
+    "theme_hint": "Compassion"
+  },
+  {
+    "target_word": "VAPOR",
+    "theme_hint": "Gas form"
+  },
+  {
+    "target_word": "SPICE",
+    "theme_hint": "Flavor booster"
+  },
+  {
+    "target_word": "FLINT",
+    "theme_hint": "Sparks"
+  },
+  {
+    "target_word": "SCALE",
+    "theme_hint": "Measurement"
+  },
+  {
+    "target_word": "SCORE",
+    "theme_hint": "Points"
+  },
+  {
+    "target_word": "GIANT",
+    "theme_hint": "Very large"
+  },
+  {
+    "target_word": "SCENE",
+    "theme_hint": "Setting"
+  },
+  {
+    "target_word": "LUNCH",
+    "theme_hint": "Midday meal"
+  },
+  {
+    "target_word": "NURSE",
+    "theme_hint": "Healthcare role"
+  },
+  {
+    "target_word": "SUITE",
+    "theme_hint": "Set of things"
+  },
+  {
+    "target_word": "POINT",
+    "theme_hint": "Tip or idea"
+  },
+  {
+    "target_word": "CATCH",
+    "theme_hint": "To capture"
+  },
+  {
+    "target_word": "SPEND",
+    "theme_hint": "Use up"
+  },
+  {
+    "target_word": "ADOPT",
+    "theme_hint": "Take in"
+  },
+  {
+    "target_word": "THEME",
+    "theme_hint": "Main idea"
+  },
+  {
+    "target_word": "LIMIT",
+    "theme_hint": "Maximum"
+  },
+  {
+    "target_word": "TOPIC",
+    "theme_hint": "Subject"
+  },
+  {
+    "target_word": "CLEAR",
+    "theme_hint": "Transparent"
+  },
+  {
+    "target_word": "CLEAN",
+    "theme_hint": "Not dirty"
+  },
+  {
+    "target_word": "CHECK",
+    "theme_hint": "Verify"
+  },
+  {
+    "target_word": "STORE",
+    "theme_hint": "Shop or keep"
+  },
+  {
+    "target_word": "VISIT",
+    "theme_hint": "Go see"
+  },
+  {
+    "target_word": "SPEED",
+    "theme_hint": "How fast"
+  },
+  {
+    "target_word": "BROKE",
+    "theme_hint": "Not working"
+  },
+  {
+    "target_word": "GUIDE",
+    "theme_hint": "Show the way"
+  },
+  {
+    "target_word": "AGAIN",
+    "theme_hint": "Once more"
+  },
+  {
+    "target_word": "ARRAY",
+    "theme_hint": "Ordered list"
+  },
+  {
+    "target_word": "HARDY",
+    "theme_hint": "Tough"
+  },
+  {
+    "target_word": "BRIEF",
+    "theme_hint": "Short"
+  },
+  {
+    "target_word": "DAILY",
+    "theme_hint": "Every day"
+  },
+  {
+    "target_word": "OTHER",
+    "theme_hint": "Different"
+  },
+  {
+    "target_word": "MOVIE",
+    "theme_hint": "Film"
+  },
+  {
+    "target_word": "MOUTH",
+    "theme_hint": "Face part"
+  },
+  {
+    "target_word": "STRIP",
+    "theme_hint": "Narrow piece"
+  }
 ]
-

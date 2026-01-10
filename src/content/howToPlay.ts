@@ -7,6 +7,11 @@ export const HOW_TO_PLAY_SLIDES: HowToPlaySlide[] = [
     body: "Crack the 5‑letter word as fast as possible. Everyone gets the same puzzle for the current timer window.",
   },
   {
+    emoji: "👤",
+    title: "Guest Mode",
+    body: "No account required to play. Use Guest Mode if you want to let friends try WordCrack—upgrade later to save progress across devices.",
+  },
+  {
     emoji: "🔤",
     title: "Ciphered Word",
     body: "You’ll see a cipher word. It’s created from the hidden target using one shift amount (some positions may be unshifted).",
@@ -34,7 +39,7 @@ export const HOW_TO_PLAY_SLIDES: HowToPlaySlide[] = [
   {
     emoji: "🏆",
     title: "Leaderboards",
-    body: "Daily puzzles are leaderboard‑eligible. Practice puzzles never count toward leaderboards.",
+    body: "Daily puzzles are leaderboard‑eligible. Practice puzzles help you build skill + speed and never count toward leaderboards.",
   },
   {
     emoji: "⭐",

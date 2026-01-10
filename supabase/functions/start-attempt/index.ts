@@ -6,6 +6,7 @@ import { getUtcDateString, json } from "../_shared/utils.ts";
 import { withCors } from "../_shared/http.ts";
 
 type Mode = "daily" | "practice";
+const PRACTICE_DAILY_LIMIT = 5;
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
@@ -44,6 +45,37 @@ Deno.serve(async (req) => {
     } else {
       if (puzzle.kind !== "practice") {
         return json({ error: "Practice attempts can only be started for practice puzzles" }, { status: 400, headers: corsHeaders });
+      }
+
+      // Free users: limit practice attempts per UTC day. Premium: unlimited.
+      const now = new Date();
+      const today = getUtcDateString(now);
+      const { data: ent } = await admin
+        .from("entitlements")
+        .select("premium_until")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      const premiumUntil = ent?.premium_until ? new Date(ent.premium_until).getTime() : 0;
+      const isPremium = premiumUntil > now.getTime();
+
+      if (!isPremium) {
+        const start = new Date(`${today}T00:00:00Z`);
+        const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+        const { count, error: countErr } = await admin
+          .from("attempts")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .eq("mode", "practice")
+          .gte("created_at", start.toISOString())
+          .lt("created_at", end.toISOString());
+        if (countErr) return json({ error: countErr.message }, { status: 500, headers: corsHeaders });
+        const used = count ?? 0;
+        if (used >= PRACTICE_DAILY_LIMIT) {
+          return json(
+            { error: "Practice limit reached (5/day). Upgrade to Premium for unlimited practice.", code: "PRACTICE_LIMIT", limit: PRACTICE_DAILY_LIMIT, used },
+            { status: 402, headers: corsHeaders },
+          );
+        }
       }
     }
 

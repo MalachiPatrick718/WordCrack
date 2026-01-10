@@ -370,19 +370,19 @@ export function HomeScreen({ navigation }: Props) {
       </View>
 
       {/* Practice Button (Premium) */}
-      {iap.premium ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => navigation.navigate("Puzzle", { mode: "practice" })}
-          style={({ pressed }) => [
-            styles.practiceButton,
-            pressed && { opacity: 0.92 },
-          ]}
-        >
-          <Text style={styles.practiceButtonText}>Practice Puzzles</Text>
-          <Text style={styles.practiceButtonSubtext}>Unlimited non‑leaderboard puzzles</Text>
-        </Pressable>
-      ) : null}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => navigation.navigate("Puzzle", { mode: "practice" })}
+            style={({ pressed }) => [
+              styles.practiceButton,
+              pressed && { opacity: 0.92 },
+            ]}
+          >
+            <Text style={styles.practiceButtonText}>Practice Puzzles</Text>
+            <Text style={styles.practiceButtonSubtext}>
+              {iap.premium ? "Unlimited non‑leaderboard puzzles" : "Free: 5 per day (Unlimited with Premium)"}
+            </Text>
+          </Pressable>
 
       {/* Quick Actions */}
       <View style={styles.quickActions}>

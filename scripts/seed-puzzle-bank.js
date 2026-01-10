@@ -25,6 +25,8 @@ function assertUpperAlpha5(s) {
 async function main() {
   const fileArg = getArg("--file");
   const filePath = path.resolve(process.cwd(), fileArg || "puzzle_bank.json");
+  const kindArg = (getArg("--kind") ?? "daily").trim();
+  const kind = kindArg === "practice" ? "practice" : "daily";
 
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -41,7 +43,7 @@ async function main() {
     const theme_hint = String(x?.theme_hint ?? "").trim();
     assertUpperAlpha5(target_word);
     if (!theme_hint) throw new Error(`Row ${idx} missing theme_hint for ${target_word}.`);
-    return { target_word, theme_hint, enabled: x?.enabled == null ? true : Boolean(x.enabled) };
+    return { target_word, theme_hint, kind, enabled: x?.enabled == null ? true : Boolean(x.enabled) };
   });
 
   const supabase = createClient(url, key, { auth: { persistSession: false } });

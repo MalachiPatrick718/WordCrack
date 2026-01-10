@@ -98,6 +98,8 @@ async function main() {
 
   const count = Math.max(1, Math.min(500, Number(getArg("--count") ?? "30")));
   const minBuffer = Math.max(0, Math.min(5000, Number(getArg("--min-buffer") ?? "0")));
+  const kindArg = (getArg("--kind") ?? "daily").trim();
+  const kind = kindArg === "practice" ? "practice" : "daily";
 
   const supabase = createClient(url, key, { auth: { persistSession: false } });
   const existing = await fetchAllExistingWords(supabase);
@@ -118,6 +120,7 @@ async function main() {
     picked.push({
       target_word: w,
       theme_hint: pickHint(),
+      kind,
       enabled: true,
       // Don't jump the queue ahead of older entries:
       // mark as "recently used" so the LRU selector continues through older puzzles.

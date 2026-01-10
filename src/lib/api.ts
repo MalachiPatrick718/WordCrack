@@ -29,7 +29,22 @@ async function invoke<T>(name: string, opts: { method?: string; body?: unknown }
     method: (opts.method ?? "POST") as "POST" | "GET" | "PUT" | "PATCH" | "DELETE",
     body: opts.body as Record<string, any> | string | undefined,
   });
-  if (error) throw error;
+  if (error) {
+    // Supabase Functions errors often hide the server message behind a generic "non-2xx" text.
+    // Try to surface the JSON error payload when present.
+    const ctx = (error as any)?.context;
+    const body = ctx?.body;
+    let msg = error.message ?? "Request failed";
+    try {
+      const parsed = typeof body === "string" ? JSON.parse(body) : body;
+      if (parsed?.error) msg = String(parsed.error);
+    } catch {
+      // ignore
+    }
+    const e = new Error(msg);
+    (e as any).status = ctx?.status ?? ctx?.statusCode;
+    throw e;
+  }
   return data as T;
 }
 
@@ -40,9 +55,8 @@ export async function getTodayPuzzle(): Promise<PuzzlePublic> {
 }
 
 export async function getPracticePuzzle(): Promise<PuzzlePublic> {
-  const { data, error } = await supabase.functions.invoke("get-practice-puzzle", { method: "GET" });
-  if (error) throw error;
-  return (data as { puzzle: PuzzlePublic }).puzzle;
+  const res = await invoke<{ puzzle: PuzzlePublic }>("get-practice-puzzle", { method: "GET" });
+  return res.puzzle;
 }
 
 export async function startAttempt(puzzle_id: string, mode: "daily" | "practice"): Promise<Attempt> {

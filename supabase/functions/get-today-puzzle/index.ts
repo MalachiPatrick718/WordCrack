@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
 
     if (!puzzle) {
       // Auto-create from puzzle bank (service_role only).
-      const { data: claimed, error: claimErr } = await supabase.rpc("claim_puzzle_bank_entry");
+      const { data: claimed, error: claimErr } = await supabase.rpc("claim_puzzle_bank_entry", { p_kind: "daily" });
       if (claimErr) return json({ error: claimErr.message }, { status: 500, headers: corsHeaders });
       const picked = Array.isArray(claimed) ? claimed[0] : null;
       if (!picked) return json({ error: "Puzzle bank is empty" }, { status: 500, headers: corsHeaders });
