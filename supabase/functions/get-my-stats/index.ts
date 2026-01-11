@@ -5,7 +5,7 @@ import { supabaseAdmin } from "../_shared/supabase.ts";
 import { getUtcDateString, json } from "../_shared/utils.ts";
 import { withCors } from "../_shared/http.ts";
 
-type Row = { puzzle_date: string; final_time_ms: number; hints_used: unknown };
+type Row = { puzzle_date: string; solve_time_ms: number; final_time_ms: number; hints_used: unknown };
 
 function daysBetweenUtc(a: string, b: string): number {
   const da = new Date(`${a}T00:00:00Z`).getTime();
@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
     // Pull recent daily completions with puzzle_date + variant
     const { data, error } = await admin
       .from("attempts")
-      .select("final_time_ms,hints_used,puzzles(puzzle_date,variant)")
+      .select("solve_time_ms,final_time_ms,hints_used,puzzles(puzzle_date,variant)")
       .eq("user_id", user.id)
       .eq("mode", "daily")
       .eq("is_completed", true)
@@ -43,15 +43,23 @@ Deno.serve(async (req) => {
       .map((r: any) => ({
         puzzle_date: r.puzzles?.puzzle_date as string,
         variant: (r.puzzles?.variant as "cipher" | "scramble") ?? "scramble",
+        solve_time_ms: r.solve_time_ms as number,
         final_time_ms: r.final_time_ms as number,
         hints_used: r.hints_used,
       }))
-      .filter((r) => Boolean(r.puzzle_date) && (r.variant === "cipher" || r.variant === "scramble"));
+      .filter(
+        (r) =>
+          Boolean(r.puzzle_date) &&
+          (r.variant === "cipher" || r.variant === "scramble") &&
+          Number.isFinite(r.solve_time_ms) &&
+          r.solve_time_ms >= 0,
+      );
 
     const today = getUtcDateString();
-    const best_time_ms = rowsAll.length ? Math.min(...rowsAll.map((r) => r.final_time_ms)) : null;
-    const last7 = rowsAll.slice(0, 7).map((r) => r.final_time_ms);
-    const last30 = rowsAll.slice(0, 30).map((r) => r.final_time_ms);
+    // Best time = lowest SOLVE time (raw), puzzle-type specific (and overall).
+    const best_time_ms = rowsAll.length ? Math.min(...rowsAll.map((r) => r.solve_time_ms)) : null;
+    const last7 = rowsAll.slice(0, 7).map((r) => r.solve_time_ms);
+    const last30 = rowsAll.slice(0, 30).map((r) => r.solve_time_ms);
     const hints_used_count = rowsAll.reduce((sum, r) => sum + (Array.isArray(r.hints_used) ? r.hints_used.length : 0), 0);
 
     // Current streak: consecutive puzzle_date ending today (if today's solved) otherwise 0.
@@ -76,9 +84,9 @@ Deno.serve(async (req) => {
 
     function statsForVariant(variant: "cipher" | "scramble") {
       const rows = rowsAll.filter((r) => r.variant === variant);
-      const best = rows.length ? Math.min(...rows.map((r) => r.final_time_ms)) : null;
-      const last7v = rows.slice(0, 7).map((r) => r.final_time_ms);
-      const last30v = rows.slice(0, 30).map((r) => r.final_time_ms);
+      const best = rows.length ? Math.min(...rows.map((r) => r.solve_time_ms)) : null;
+      const last7v = rows.slice(0, 7).map((r) => r.solve_time_ms);
+      const last30v = rows.slice(0, 30).map((r) => r.solve_time_ms);
       const hints = rows.reduce((sum, r) => sum + (Array.isArray(r.hints_used) ? r.hints_used.length : 0), 0);
       return {
         best_time_ms: best,

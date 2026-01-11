@@ -3,6 +3,7 @@ import { getJson, setJson } from "./storage";
 
 const KEY = "wordcrack:dailyReminder";
 const ANDROID_CHANNEL_ID = "default";
+const HOURLY_SECONDS = 60 * 60;
 
 type Stored = {
   enabled: boolean;
@@ -59,22 +60,30 @@ export async function enableDailyReminder(hour = 9, minute = 0): Promise<void> {
   const prev = await getJson<Stored>(KEY);
   await cancelPrevious(prev ?? null);
 
-  // Fire every hour at :00 (local time). This matches the UTC puzzle boundary since it's always at minute 0.
-  const id = await Notifications.scheduleNotificationAsync({
-    content: {
-      title: "New WordCrack Puzzle Available",
-      body: "A new puzzle is ready. Tap to play.",
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
-      minute: 0,
-      second: 0,
-      repeats: true,
-      channelId: ANDROID_CHANNEL_ID,
-    },
-  });
+  // Android (Expo Notifications) does NOT support `calendar` triggers.
+  // To keep "top of the hour" alignment, schedule the next 24 hour-boundary notifications as DATE triggers.
+  const first = nextUtcHourBoundary();
+  const count = 24;
+  const ids: string[] = [];
 
-  await setJson(KEY, { enabled: true, notificationId: id, hour, minute });
+  for (let i = 0; i < count; i++) {
+    const at = new Date(first.getTime() + i * HOURLY_SECONDS * 1000);
+    // eslint-disable-next-line no-await-in-loop
+    const id = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "New WordCrack Puzzle Available",
+        body: "A new puzzle is ready. Tap to play.",
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: at,
+        channelId: ANDROID_CHANNEL_ID,
+      },
+    });
+    ids.push(id);
+  }
+
+  await setJson(KEY, { enabled: true, notificationIds: ids, hour, minute });
 }
 
 export async function disableDailyReminder(): Promise<void> {

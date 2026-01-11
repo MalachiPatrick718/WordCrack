@@ -13,7 +13,7 @@
       "backgroundColor": "#2D5A8A"
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.wordcrack.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false

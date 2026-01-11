@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from "react";
 import { FlatList, Image, Text, View, useWindowDimensions, Pressable, StyleSheet } from "react-native";
-import { markOnboarded } from "../AppRoot";
+import { markOnboarded } from "../lib/onboarding";
 import { useTheme } from "../theme/theme";
 import { HOW_TO_PLAY_SLIDES, type HowToPlaySlide } from "../content/howToPlay";
 

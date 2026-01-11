@@ -3,7 +3,7 @@ import { DarkTheme as NavDarkTheme, DefaultTheme as NavDefaultTheme, NavigationC
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { ActivityIndicator, StatusBar, View } from "react-native";
 import { AuthProvider, useAuth } from "./state/AuthProvider";
-import { getJson, setJson } from "./lib/storage";
+import { getJson } from "./lib/storage";
 import { supabase } from "./lib/supabase";
 import { IapProvider } from "./purchases/IapProvider";
 import { OnboardingScreen } from "./screens/OnboardingScreen";
@@ -56,6 +56,7 @@ function BootRouter() {
   const [profileLoading, setProfileLoading] = useState(false);
 
   useEffect(() => {
+    // Keep the storage read in this file to avoid coupling boot logic to the onboarding UI.
     getJson<boolean>("wordcrack:onboarded").then((v) => setOnboarded(v ?? false));
   }, []);
 
@@ -98,12 +99,11 @@ function BootRouter() {
   const needsProfileSetup =
     !!user &&
     !isAnonymous &&
-    !!profile &&
-    (profile.username === "player" || profile.username.startsWith("player_") || !profile.avatar_url);
+    (!profile || profile.username === "player" || profile.username.startsWith("player_") || !profile.avatar_url);
 
   // Important: avoid showing Home first on fresh signups.
   // Wait for profile to load for signed-in non-guest users, then choose the initial route.
-  if (user && !isAnonymous && (profileLoading || !profile)) {
+  if (user && !isAnonymous && profileLoading) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
         <ActivityIndicator />
@@ -229,8 +229,6 @@ function ThemedApp() {
   );
 }
 
-export async function markOnboarded() {
-  await setJson("wordcrack:onboarded", true);
-}
+// (moved to src/lib/onboarding.ts to avoid a require cycle)
 
 

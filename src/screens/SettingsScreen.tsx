@@ -402,7 +402,19 @@ export function SettingsScreen({ navigation }: Props) {
                     try {
                       setDeleting(true);
                       await deleteAccount();
-                      Alert.alert("Account Deleted", "Your account has been permanently deleted.");
+                      setDeleting(false);
+                      Alert.alert("Account Deleted", "Your account has been permanently deleted.", [
+                        {
+                          text: "OK",
+                          onPress: () => {
+                            // The auth user is gone server-side; make sure we clear local session too.
+                            void signOut();
+                            // BootRouter conditionally mounts Auth only when `!user`,
+                            // so resetting to "Auth" from the signed-in stack can be unhandled.
+                            // Signing out is enough; BootRouter will re-render to the Auth flow.
+                          },
+                        },
+                      ]);
                     } catch (e: any) {
                       Alert.alert("Delete failed", e?.message ?? "Unknown error");
                       setDeleting(false);

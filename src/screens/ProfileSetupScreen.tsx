@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, findNodeHandle, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
+import { Alert, findNodeHandle, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../AppRoot";
 import { supabase } from "../lib/supabase";
@@ -36,7 +36,15 @@ const AVATAR_SEEDS = [
 ];
 
 function avatarUrlForSeed(seed: string) {
-  return `https://api.dicebear.com/9.x/thumbs/png?seed=${encodeURIComponent(seed)}`;
+  // Use a style that naturally varies skin tone + expression while still being deterministic per seed.
+  return `https://api.dicebear.com/9.x/adventurer/png?seed=${encodeURIComponent(seed)}`;
+}
+
+function randomInviteCode(): string {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let out = "";
+  for (let i = 0; i < 8; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
 }
 
 const US_STATES: { code: string; name: string }[] = [
@@ -115,8 +123,13 @@ export function ProfileSetupScreen({ navigation, route }: Props) {
   const [stateCode, setStateCode] = useState("");
   const [stateQuery, setStateQuery] = useState("");
   const [saving, setSaving] = useState(false);
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
 
-  const avatarChoices = useMemo(() => AVATAR_SEEDS.map((s) => avatarUrlForSeed(s)), []);
+  const avatarChoices = useMemo(() => {
+    // Add variety by mixing base seeds with a deterministic "-alt" variant and trimming to a friendly grid size.
+    const seeds = AVATAR_SEEDS.flatMap((s) => [s, `${s}-alt`]).slice(0, 36);
+    return seeds.map((s) => avatarUrlForSeed(s));
+  }, []);
   const stateSuggestions = useMemo(() => {
     const q = stateQuery.trim().toLowerCase();
     if (!q) return [];
@@ -179,17 +192,85 @@ export function ProfileSetupScreen({ navigation, route }: Props) {
 
     try {
       setSaving(true);
-      const { error } = await supabase
+      // Try update first (normal path).
+      // NOTE: Supabase returns `data: null` for update() unless you chain .select().
+      // We need the row count to know whether the profile already exists.
+      const { data: updated, error: updErr } = await supabase
         .from("profiles")
         .update({ username: u, avatar_url: selectedAvatarUrl, location: picked })
+        .select("user_id")
         .eq("user_id", user.id);
-      if (error) throw error;
+      if (updErr) throw updErr;
+
+      // If the profile row doesn't exist (older accounts / trigger issues), create it.
+      // Supabase doesn't always surface "0 rows updated" as an error, so we explicitly check.
+      const updatedCount = Array.isArray(updated) ? updated.length : updated ? 1 : 0;
+      if (updatedCount === 0) {
+        // Insert with a generated invite_code. Retry a few times for rare collisions.
+        let lastErr: any = null;
+        for (let i = 0; i < 10; i++) {
+          // Only change the username if we *actually* collide on username.
+          const candidateUsername = i === 0 ? u : `${u}_${i}`;
+          const code = randomInviteCode();
+          const { error: insErr } = await supabase.from("profiles").insert({
+            user_id: user.id,
+            username: candidateUsername,
+            avatar_url: selectedAvatarUrl,
+            invite_code: code,
+            location: picked,
+          });
+          if (!insErr) break;
+          lastErr = insErr;
+          const msg = String(insErr?.message ?? "").toLowerCase();
+          const details = String((insErr as any)?.details ?? "").toLowerCase();
+          const combined = `${msg} ${details}`;
+
+          // Retry on uniqueness collisions (username/invite_code). Otherwise throw.
+          if (combined.includes("duplicate") || combined.includes("unique")) {
+            // If it's an invite_code collision, retry with same username but new code.
+            if (combined.includes("invite") || combined.includes("invite_code")) {
+              continue;
+            }
+            // If it's username collision, we'll retry with u_1, u_2, etc via candidateUsername.
+            continue;
+          }
+          throw insErr;
+        }
+        if (lastErr) {
+          // If we got here, we exhausted retries.
+          throw lastErr;
+        }
+      }
 
       navigation.reset({ index: 0, routes: [{ name: "Home" }] });
     } catch (e: any) {
       const msg = String(e?.message ?? "Unknown error");
-      if (msg.toLowerCase().includes("duplicate key value") || msg.toLowerCase().includes("unique")) {
+      const msgL = msg.toLowerCase();
+      const details = String((e as any)?.details ?? "").toLowerCase();
+      const combined = `${msgL} ${details}`;
+
+      // Be precise: only show "Username taken" when it's actually the username constraint.
+      if (combined.includes("profiles_username") || combined.includes("username") && (combined.includes("duplicate") || combined.includes("unique"))) {
         Alert.alert("Username taken", "Try a different username.");
+      } else if (combined.includes("invite") && (combined.includes("duplicate") || combined.includes("unique"))) {
+        Alert.alert("Try again", "We hit a rare invite code collision. Please press Save again.");
+      } else if (
+        combined.includes("violates foreign key constraint") ||
+        combined.includes("profiles_user_id")
+      ) {
+        Alert.alert(
+          "Session expired",
+          "Your account session is no longer valid. Please sign in again.",
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                void supabase.auth.signOut();
+                // BootRouter will switch to the Auth flow automatically once the session is cleared.
+              },
+            },
+          ],
+        );
       } else {
         Alert.alert("Save failed", msg);
       }
@@ -215,26 +296,53 @@ export function ProfileSetupScreen({ navigation, route }: Props) {
           <Text style={styles.title}>Create your profile</Text>
           <Text style={styles.subtitle}>Choose a username and profile picture for leaderboards.</Text>
 
-          <Text style={styles.label}>Choose an avatar</Text>
-          <View style={styles.avatarGrid}>
-            {avatarChoices.map((url) => {
-              const selected = url === selectedAvatarUrl;
-              return (
-                <Pressable
-                  key={url}
-                  accessibilityRole="button"
-                  onPress={() => setSelectedAvatarUrl(url)}
-                  style={({ pressed }) => [
-                    styles.avatarChoice,
-                    selected && styles.avatarChoiceSelected,
-                    pressed && { opacity: 0.9 },
-                  ]}
-                >
-                  <Image source={{ uri: url }} style={styles.avatarChoiceImage} />
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setShowAvatarPicker(true)}
+            style={({ pressed }) => [styles.chooseAvatarRow, pressed && { opacity: 0.9 }]}
+          >
+            <View style={styles.chooseAvatarCircle}>
+              <Image source={{ uri: selectedAvatarUrl }} style={styles.chooseAvatarImage} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.chooseAvatarTitle}>Choose your avatar</Text>
+              <Text style={styles.chooseAvatarSub}>Tap to pick a new look</Text>
+            </View>
+            <Text style={styles.chooseAvatarChevron}>›</Text>
+          </Pressable>
+
+          <Modal transparent visible={showAvatarPicker} animationType="fade" onRequestClose={() => setShowAvatarPicker(false)}>
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalCard}>
+                <Text style={styles.modalTitle}>Choose your avatar</Text>
+                <View style={styles.avatarGrid}>
+                  {avatarChoices.map((url) => {
+                    const selected = url === selectedAvatarUrl;
+                    return (
+                      <Pressable
+                        key={url}
+                        accessibilityRole="button"
+                        onPress={() => {
+                          setSelectedAvatarUrl(url);
+                          setShowAvatarPicker(false);
+                        }}
+                        style={({ pressed }) => [
+                          styles.avatarChoice,
+                          selected && styles.avatarChoiceSelected,
+                          pressed && { opacity: 0.9 },
+                        ]}
+                      >
+                        <Image source={{ uri: url }} style={styles.avatarChoiceImage} />
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Pressable accessibilityRole="button" onPress={() => setShowAvatarPicker(false)} style={({ pressed }) => [styles.modalClose, pressed && { opacity: 0.9 }]}>
+                  <Text style={styles.modalCloseText}>Close</Text>
                 </Pressable>
-              );
-            })}
-          </View>
+              </View>
+            </View>
+          </Modal>
 
           <Text style={styles.label}>Username</Text>
           <TextInput
@@ -341,6 +449,79 @@ function makeStyles(colors: any, shadows: any, borderRadius: any) {
     marginBottom: 16,
     lineHeight: 20,
   },
+  chooseAvatarRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 12,
+    borderRadius: borderRadius.large,
+    borderWidth: 1,
+    borderColor: colors.ui.border,
+    backgroundColor: colors.background.main,
+    marginBottom: 16,
+    ...shadows.small,
+  },
+  chooseAvatarCircle: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    overflow: "hidden",
+    backgroundColor: colors.background.card,
+    borderWidth: 2,
+    borderColor: colors.primary.blue,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  chooseAvatarImage: {
+    width: 54,
+    height: 54,
+  },
+  chooseAvatarTitle: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: colors.text.primary,
+  },
+  chooseAvatarSub: {
+    marginTop: 2,
+    fontSize: 12,
+    color: colors.text.secondary,
+  },
+  chooseAvatarChevron: {
+    fontSize: 28,
+    color: colors.text.muted,
+    marginTop: -2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 420,
+    backgroundColor: colors.background.card,
+    borderRadius: borderRadius.xl,
+    padding: 16,
+    ...shadows.large,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: colors.text.primary,
+    textAlign: "center",
+    marginBottom: 12,
+  },
+  modalClose: {
+    marginTop: 14,
+    paddingVertical: 12,
+    borderRadius: borderRadius.large,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.ui.border,
+  },
+  modalCloseText: { fontWeight: "900", color: colors.text.primary },
   avatarGrid: {
     flexDirection: "row",
     flexWrap: "wrap",

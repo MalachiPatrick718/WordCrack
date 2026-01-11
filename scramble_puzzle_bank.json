@@ -1,0 +1,13 @@
+[
+  { "target_word": "PLANET", "theme_hint": "Space object" },
+  { "target_word": "ORANGE", "theme_hint": "Color or fruit" },
+  { "target_word": "STREAM", "theme_hint": "Flowing water" },
+  { "target_word": "POCKET", "theme_hint": "Clothing feature" },
+  { "target_word": "CASTLE", "theme_hint": "Fortified building" },
+  { "target_word": "MARKET", "theme_hint": "Place to buy and sell" },
+  { "target_word": "TARGET", "theme_hint": "Aim point" },
+  { "target_word": "SUMMER", "theme_hint": "Warm season" },
+  { "target_word": "WINTER", "theme_hint": "Cold season" },
+  { "target_word": "GARDEN", "theme_hint": "Plants and growth" }
+]
+

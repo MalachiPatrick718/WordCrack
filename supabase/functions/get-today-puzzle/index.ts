@@ -4,31 +4,32 @@ import { supabaseAdmin } from "../_shared/supabase.ts";
 import { assertUpperAlpha, getUtcDateString, json } from "../_shared/utils.ts";
 import { generateCipherPuzzleFromTarget, generateScramblePuzzleFromTarget } from "../_shared/puzzlegen.ts";
 
-// Hourly puzzles (UTC).
-const WORD_LEN = 5;
+// Hourly puzzles (UTC). Cipher=5 letters, Scramble=6 letters.
+const CIPHER_LEN = 5;
+const SCRAMBLE_LEN = 6;
 
 function isValidScramblePuzzlePublicRow(p: any): boolean {
   try {
     if (!p) return false;
-    if (typeof p.cipher_word !== "string" || p.cipher_word.length !== WORD_LEN) return false;
+    if (typeof p.cipher_word !== "string" || p.cipher_word.length !== SCRAMBLE_LEN) return false;
     const sets = p.letter_sets;
-    if (!Array.isArray(sets) || sets.length !== WORD_LEN) return false;
-    for (let i = 0; i < WORD_LEN; i++) {
-      if (!Array.isArray(sets[i]) || sets[i].length !== 5) return false;
+    if (!Array.isArray(sets) || sets.length !== SCRAMBLE_LEN) return false;
+    for (let i = 0; i < SCRAMBLE_LEN; i++) {
+      if (!Array.isArray(sets[i]) || sets[i].length !== SCRAMBLE_LEN) return false;
     }
-    // New mechanic sanity: each column should be a permutation of the same 5 letters (the target word letters).
+    // New mechanic sanity: each column should be a permutation of the same 6 letters (the target word letters).
     // Older cipher/decoy puzzles had different letter sets per column; treat those as invalid so we can regenerate.
     const sig0 = [...sets[0]].slice().sort().join("");
-    for (let i = 1; i < WORD_LEN; i++) {
+    for (let i = 1; i < SCRAMBLE_LEN; i++) {
       const sig = [...sets[i]].slice().sort().join("");
       if (sig !== sig0) return false;
     }
     const si = p.start_idxs;
     if (si != null) {
-      if (!Array.isArray(si) || si.length !== WORD_LEN) return false;
-      for (let i = 0; i < WORD_LEN; i++) {
+      if (!Array.isArray(si) || si.length !== SCRAMBLE_LEN) return false;
+      for (let i = 0; i < SCRAMBLE_LEN; i++) {
         const v = Number(si[i]);
-        if (!Number.isFinite(v) || v < 0 || v > 4) return false;
+        if (!Number.isFinite(v) || v < 0 || v > (SCRAMBLE_LEN - 1)) return false;
       }
     }
     return true;
@@ -40,18 +41,18 @@ function isValidScramblePuzzlePublicRow(p: any): boolean {
 function isValidCipherPuzzlePublicRow(p: any): boolean {
   try {
     if (!p) return false;
-    if (typeof p.cipher_word !== "string" || p.cipher_word.length !== WORD_LEN) return false;
+    if (typeof p.cipher_word !== "string" || p.cipher_word.length !== CIPHER_LEN) return false;
     const sets = p.letter_sets;
-    if (!Array.isArray(sets) || sets.length !== WORD_LEN) return false;
-    for (let i = 0; i < WORD_LEN; i++) {
-      if (!Array.isArray(sets[i]) || sets[i].length !== 5) return false;
+    if (!Array.isArray(sets) || sets.length !== CIPHER_LEN) return false;
+    for (let i = 0; i < CIPHER_LEN; i++) {
+      if (!Array.isArray(sets[i]) || sets[i].length !== CIPHER_LEN) return false;
     }
     const si = p.start_idxs;
     if (si != null) {
-      if (!Array.isArray(si) || si.length !== WORD_LEN) return false;
-      for (let i = 0; i < WORD_LEN; i++) {
+      if (!Array.isArray(si) || si.length !== CIPHER_LEN) return false;
+      for (let i = 0; i < CIPHER_LEN; i++) {
         const v = Number(si[i]);
-        if (!Number.isFinite(v) || v < 0 || v > 4) return false;
+        if (!Number.isFinite(v) || v < 0 || v > (CIPHER_LEN - 1)) return false;
       }
     }
     return true;
@@ -112,7 +113,7 @@ Deno.serve(async (req) => {
 
     if (!puzzle) {
       // Auto-create from puzzle bank (service_role only).
-      const { data: claimed, error: claimErr } = await supabase.rpc("claim_puzzle_bank_entry", { p_kind: "daily" });
+      const { data: claimed, error: claimErr } = await supabase.rpc("claim_puzzle_bank_entry", { p_kind: "daily", p_variant: variant });
       if (claimErr) return json({ error: claimErr.message }, { status: 500, headers: corsHeaders });
       const picked = Array.isArray(claimed) ? claimed[0] : null;
       if (!picked) return json({ error: "Puzzle bank is empty" }, { status: 500, headers: corsHeaders });
@@ -121,7 +122,8 @@ Deno.serve(async (req) => {
       const theme_hint = String((picked as any).theme_hint ?? "");
       const bank_id = Number((picked as any).id);
 
-      assertUpperAlpha(target_word, 5);
+      const wordLen = variant === "cipher" ? CIPHER_LEN : SCRAMBLE_LEN;
+      assertUpperAlpha(target_word, wordLen);
       if (!Number.isFinite(bank_id)) return json({ error: "Invalid puzzle bank entry" }, { status: 500, headers: corsHeaders });
 
       const gen = variant === "cipher" ? generateCipherPuzzleFromTarget({ target_word }) : generateScramblePuzzleFromTarget({ target_word });

@@ -38,45 +38,42 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
     const variant = String((body as any)?.variant ?? url.searchParams.get("variant") ?? "scramble").toLowerCase();
+    const dryRun = Boolean((body as any)?.dry_run ?? false);
     if (variant !== "cipher" && variant !== "scramble") {
       return json({ error: "Invalid variant (expected cipher|scramble)" }, { status: 400, headers: corsHeaders });
     }
     const admin = supabaseAdmin();
     const today = getUtcDateString();
 
-    // Free users: limit practice to 5 puzzles per UTC day. Premium: unlimited.
-    const now = new Date();
-    const { data: ent } = await admin
-      .from("entitlements")
-      .select("premium_until")
+    // Practice limit: 5 per UTC day *per puzzle type* (cipher vs scramble).
+    const start = new Date(`${today}T00:00:00Z`);
+    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+    const { data: attempts, error: attemptsErr } = await admin
+      .from("attempts")
+      .select("id,puzzles(variant)")
       .eq("user_id", user.id)
-      .maybeSingle();
-    const premiumUntil = ent?.premium_until ? new Date(ent.premium_until).getTime() : 0;
-    const isPremium = premiumUntil > now.getTime();
+      .eq("mode", "practice")
+      .gte("created_at", start.toISOString())
+      .lt("created_at", end.toISOString());
+    if (attemptsErr) return json({ error: attemptsErr.message }, { status: 500, headers: corsHeaders });
 
-    if (!isPremium) {
-      const start = new Date(`${today}T00:00:00Z`);
-      const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-      const { count, error: countErr } = await admin
-        .from("attempts")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .eq("mode", "practice")
-        .gte("created_at", start.toISOString())
-        .lt("created_at", end.toISOString());
-      if (countErr) return json({ error: countErr.message }, { status: 500, headers: corsHeaders });
-      const used = count ?? 0;
-      const limit = 5;
-      if (used >= limit) {
-        return json(
-          { error: "Practice limit reached (5/day). Upgrade to Premium for unlimited practice.", code: "PRACTICE_LIMIT", limit, used },
-          { status: 402, headers: corsHeaders },
-        );
-      }
+    const used = (attempts ?? []).filter((a: any) => String(a?.puzzles?.variant ?? "scramble") === variant).length;
+    const limit = 5;
+    const remaining = Math.max(0, limit - used);
+
+    if (dryRun) {
+      return json({ ok: true, variant, limit, used, remaining }, { headers: corsHeaders });
+    }
+
+    if (used >= limit) {
+      return json(
+        { error: `Practice limit reached (${limit}/day for ${variant}).`, code: "PRACTICE_LIMIT", variant, limit, used },
+        { status: 402, headers: corsHeaders },
+      );
     }
 
     // Claim from the curated puzzle bank so theme always matches target word.
-    const { data: claimed, error: claimErr } = await admin.rpc("claim_puzzle_bank_entry", { p_kind: "practice" });
+    const { data: claimed, error: claimErr } = await admin.rpc("claim_puzzle_bank_entry", { p_kind: "practice", p_variant: variant });
     if (claimErr) return json({ error: claimErr.message }, { status: 500, headers: corsHeaders });
     const picked = Array.isArray(claimed) ? claimed[0] : null;
     if (!picked) return json({ error: "Puzzle bank is empty" }, { status: 500, headers: corsHeaders });
@@ -84,7 +81,7 @@ Deno.serve(async (req) => {
     const target_word = String((picked as any).target_word ?? "");
     const theme_hint = String((picked as any).theme_hint ?? "");
     const bank_id = Number((picked as any).id);
-    assertUpperAlpha(target_word, 5);
+    assertUpperAlpha(target_word, variant === "cipher" ? 5 : 6);
 
     // Practice puzzles are generated on-demand with random cipher/decoys (same mechanics as daily).
     const gen = variant === "cipher" ? generateCipherPuzzleFromTarget({ target_word }) : generateScramblePuzzleFromTarget({ target_word });
@@ -109,7 +106,7 @@ Deno.serve(async (req) => {
 
     if (insErr) return json({ error: insErr.message }, { status: 500, headers: corsHeaders });
 
-    return json({ puzzle: inserted, variant }, { headers: corsHeaders });
+    return json({ puzzle: inserted, variant, limit, used: used + 1, remaining: Math.max(0, limit - (used + 1)) }, { headers: corsHeaders });
   } catch (e) {
     if (e instanceof Response) return withCors(e);
     const msg = e instanceof Error ? e.message : "Unknown error";

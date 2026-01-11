@@ -15,8 +15,8 @@ import { PuzzleIntroModal } from "../components/PuzzleIntroModal";
 type Props = NativeStackScreenProps<RootStackParamList, "Puzzle">;
 
 // Hourly puzzles are governed by server time; do not restart timers client-side.
-const WORD_LEN = 5;
-const PLACEHOLDER = "—".repeat(WORD_LEN);
+const CIPHER_LEN = 5;
+const SCRAMBLE_LEN = 6;
 
 function formatMs(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -29,8 +29,10 @@ function formatMs(ms: number): string {
 export function PuzzleScreen({ navigation, route }: Props) {
   const puzzleMode = route.params.mode;
   const variant = route.params.variant;
+  const wordLen = variant === "scramble" ? SCRAMBLE_LEN : CIPHER_LEN;
+  const PLACEHOLDER = "—".repeat(wordLen);
   const { colors, shadows, borderRadius } = useTheme();
-  const styles = useMemo(() => makeStyles(colors, shadows, borderRadius), [colors, shadows, borderRadius]);
+  const styles = useMemo(() => makeStyles(colors, shadows, borderRadius, wordLen), [colors, shadows, borderRadius, wordLen]);
 
   const [loading, setLoading] = useState(true);
   const [puzzleId, setPuzzleId] = useState<string | null>(null);
@@ -38,6 +40,15 @@ export function PuzzleScreen({ navigation, route }: Props) {
   const [letterSets, setLetterSets] = useState<string[][]>([]);
   const [startIdxs, setStartIdxs] = useState<number[] | null>(null);
   const [themeHint, setThemeHint] = useState<string | null>(null);
+  const titleCaseTheme = (s: string | null): string => {
+    const t = String(s ?? "").trim();
+    if (!t) return "";
+    return t
+      .split(/\s+/)
+      .map((w) => (w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w))
+      .join(" ");
+  };
+
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [penaltyMs, setPenaltyMs] = useState(0);
   const [hintsUsedCount, setHintsUsedCount] = useState(0);
@@ -93,7 +104,7 @@ export function PuzzleScreen({ navigation, route }: Props) {
         setAttemptId(null);
         setPenaltyMs(0);
         setHintsUsedCount(0);
-        setIdxs(Array.from({ length: WORD_LEN }, () => null));
+        setIdxs(Array.from({ length: wordLen }, () => null));
 
         const puzzle =
           puzzleMode === "practice" ? await getPracticePuzzleByVariant(variant) : await getTodayPuzzleByVariant(variant);
@@ -103,12 +114,14 @@ export function PuzzleScreen({ navigation, route }: Props) {
         setCipherWord(puzzle.cipher_word);
         setLetterSets(puzzle.letter_sets);
         const si =
-          Array.isArray((puzzle as any).start_idxs) && ((puzzle as any).start_idxs as unknown[]).length === WORD_LEN
-            ? (((puzzle as any).start_idxs as unknown[]) as number[]).map((n) => (Number.isFinite(n) ? Math.max(0, Math.min(4, Number(n))) : 0))
+          Array.isArray((puzzle as any).start_idxs) && ((puzzle as any).start_idxs as unknown[]).length === wordLen
+            ? (((puzzle as any).start_idxs as unknown[]) as number[]).map((n) =>
+                Number.isFinite(n) ? Math.max(0, Math.min(wordLen - 1, Number(n))) : 0,
+              )
             : null;
         setStartIdxs(si);
         // Prefill letter boxes on load (colored, not blank), but still keep interaction locked until Start.
-        setIdxs(si ?? Array.from({ length: WORD_LEN }, () => 0));
+        setIdxs(si ?? Array.from({ length: wordLen }, () => 0));
         setThemeHint(puzzle.theme_hint ?? null);
         await setJson(
           puzzleMode === "practice" ? `wordcrack:practicePuzzleCache:${variant}` : `wordcrack:todayPuzzleCache:${variant}`,
@@ -134,7 +147,7 @@ export function PuzzleScreen({ navigation, route }: Props) {
   }, [now, started, paused]);
 
   // Prefilled on puzzle load via `start_idxs` (no "already solved-looking" start state).
-  const [idxs, setIdxs] = useState<(number | null)[]>(Array.from({ length: WORD_LEN }, () => null));
+  const [idxs, setIdxs] = useState<(number | null)[]>(Array.from({ length: wordLen }, () => null));
 
   const getSelectedLetter = (col: number): string | null => {
     const set = letterSets[col];
@@ -144,11 +157,11 @@ export function PuzzleScreen({ navigation, route }: Props) {
   };
 
   const guessWord = useMemo(() => {
-    if (letterSets.length !== WORD_LEN) return "";
+    if (letterSets.length !== wordLen) return "";
     const letters = letterSets.map((_, i) => getSelectedLetter(i));
     if (letters.some((l) => l == null)) return "";
     return (letters as string[]).join("");
-  }, [letterSets, idxs]);
+  }, [letterSets, idxs, wordLen]);
 
   const remainingHints = 3 - hintsUsedCount;
   const allSelected = idxs.every((i) => i !== null);
@@ -183,10 +196,10 @@ export function PuzzleScreen({ navigation, route }: Props) {
 
       // If we somehow still have blank boxes, populate them at Start.
       if (idxs.some((v) => v == null)) {
-        if (Array.isArray(startIdxs) && startIdxs.length === WORD_LEN) {
-          setIdxs(startIdxs.map((n) => (Number.isFinite(n) ? Math.max(0, Math.min(4, n)) : 0)));
+        if (Array.isArray(startIdxs) && startIdxs.length === wordLen) {
+          setIdxs(startIdxs.map((n) => (Number.isFinite(n) ? Math.max(0, Math.min(wordLen - 1, n)) : 0)));
         } else {
-          setIdxs(Array.from({ length: WORD_LEN }, () => 0));
+          setIdxs(Array.from({ length: wordLen }, () => 0));
         }
       }
 
@@ -218,7 +231,11 @@ export function PuzzleScreen({ navigation, route }: Props) {
 
   const showHints = () => {
     if (!attemptId || !started) return;
-    if (remainingHints <= 0) return Alert.alert("No hints remaining", "You've used all 3 hints for this puzzle.");
+    if (remainingHints <= 0) {
+      setHintMessage("You’ve used all 3 hints for this puzzle. You’ve got this—trust your gut and go for it!");
+      setShowHint(true);
+      return;
+    }
     setShowHintPicker(true);
   };
 
@@ -333,15 +350,16 @@ export function PuzzleScreen({ navigation, route }: Props) {
         <Text style={styles.cipherLabel}>{variant === "cipher" ? "Ciphered Word" : "Scrambled Word"}</Text>
         {variant === "cipher" && themeHint && (
           <View style={styles.themePill}>
-            <Text style={styles.themePillText}>Theme: {themeHint}</Text>
+            <Text style={styles.themePillText}>Theme: {titleCaseTheme(themeHint)}</Text>
           </View>
         )}
         <View style={styles.cipherTiles}>
           {(() => {
-            // Cipher: always visible. Scramble: hidden until started, and hidden when paused.
-            const showWord = variant === "cipher" ? true : (started && !paused);
+            // Cipher: visible before Start, but hidden when paused.
+            // Scramble: hidden until started, and hidden when paused.
+            const showWord = paused ? false : (variant === "cipher" ? true : started);
             const displayWord = showWord ? cipherWord : "";
-            return (displayWord || PLACEHOLDER).split("").slice(0, WORD_LEN).map((letter, i) => (
+            return (displayWord || PLACEHOLDER).split("").slice(0, wordLen).map((letter, i) => (
               <View key={i} style={[styles.cipherTile, { backgroundColor: colors.tiles[i % colors.tiles.length] }]}>
                 <Text style={styles.cipherLetter}>{letter}</Text>
               </View>
@@ -406,7 +424,7 @@ export function PuzzleScreen({ navigation, route }: Props) {
 
       {/* Letter Columns */}
       <View style={styles.columnsContainer}>
-        {Array.from({ length: WORD_LEN }, (_, col) => {
+        {Array.from({ length: wordLen }, (_, col) => {
           const sel = getSelectedLetter(col);
           const cur = started ? (sel ?? "—") : "—";
           const hasSelection = sel !== null;
@@ -500,6 +518,8 @@ export function PuzzleScreen({ navigation, route }: Props) {
 
       <HintModal
         visible={showHint}
+        title={hintMessage.startsWith("You’ve used all 3 hints") ? "Out of hints!" : "Hint"}
+        emoji={hintMessage.startsWith("You’ve used all 3 hints") ? "❌" : "💡"}
         message={hintMessage}
         onClose={() => setShowHint(false)}
       />
@@ -539,6 +559,7 @@ function makeStyles(
   colors: any,
   shadows: any,
   borderRadius: any,
+  wordLen: number,
 ) {
   return StyleSheet.create({
   container: {
@@ -572,18 +593,18 @@ function makeStyles(
   },
   cipherTiles: {
     flexDirection: "row",
-    gap: 6,
+    gap: wordLen === 6 ? 4 : 6,
   },
   cipherTile: {
-    width: 66,
-    height: 66,
+    width: wordLen === 6 ? 56 : 66,
+    height: wordLen === 6 ? 56 : 66,
     borderRadius: borderRadius.medium,
     alignItems: "center",
     justifyContent: "center",
     ...shadows.small,
   },
   cipherLetter: {
-    fontSize: 36,
+    fontSize: wordLen === 6 ? 30 : 36,
     fontWeight: "800",
     color: colors.text.light,
   },
@@ -671,7 +692,7 @@ function makeStyles(
   columnsContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
-    gap: 6,
+    gap: wordLen === 6 ? 4 : 6,
     marginBottom: 16,
   },
   column: {
@@ -721,7 +742,8 @@ function makeStyles(
     ...shadows.small,
   },
   hintButtonDisabled: {
-    backgroundColor: colors.text.muted,
+    // Neutral disabled grey (works in both light/dark)
+    backgroundColor: "rgba(150, 150, 150, 0.35)",
   },
   hintButtonIcon: {
     fontSize: 18,

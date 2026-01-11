@@ -91,6 +91,13 @@ export async function getPracticePuzzleByVariant(variant: "cipher" | "scramble")
   return res.puzzle;
 }
 
+export async function getPracticeRemainingByVariant(variant: "cipher" | "scramble"): Promise<{ limit: number; used: number; remaining: number }> {
+  const res = await invoke<{ ok: true; limit: number; used: number; remaining: number }>("get-practice-puzzle", {
+    body: { variant, dry_run: true },
+  });
+  return { limit: res.limit, used: res.used, remaining: res.remaining };
+}
+
 export async function startAttempt(puzzle_id: string, mode: "daily" | "practice"): Promise<Attempt> {
   const res = await invoke<{ attempt: Attempt }>("start-attempt", { body: { puzzle_id, mode } });
   return res.attempt;

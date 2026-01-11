@@ -167,6 +167,8 @@ export function AuthScreen() {
   const [busy, setBusy] = useState(false);
   const [resendReadyAt, setResendReadyAt] = useState<number>(0);
   const [tick, setTick] = useState(0);
+  const tokenDigits = useMemo(() => token.replace(/[^0-9]/g, ""), [token]);
+  const isTokenComplete = tokenDigits.length === 6;
 
   useEffect(() => {
     if (!otpSent) return;
@@ -207,12 +209,13 @@ export function AuthScreen() {
 
   const verify = async () => {
     try {
+      if (!isTokenComplete) return;
       setBusy(true);
       // Check for test account credentials
-      if (email.trim().toLowerCase() === TEST_EMAIL && token.trim() === TEST_OTP) {
+      if (email.trim().toLowerCase() === TEST_EMAIL && tokenDigits === TEST_OTP) {
         await signInWithPassword(TEST_EMAIL, TEST_PASSWORD);
       } else {
-        await verifyEmailOtp(email.trim(), token.trim());
+        await verifyEmailOtp(email.trim(), tokenDigits);
       }
     } catch (e: any) {
       Alert.alert("Verification failed", e?.message ?? "Unknown error");
@@ -336,11 +339,11 @@ export function AuthScreen() {
           ) : (
             <Pressable
               accessibilityRole="button"
-              disabled={busy || token.trim().length < 4}
+              disabled={busy || !isTokenComplete}
               onPress={verify}
               style={({ pressed }) => [
                 styles.verifyButton,
-                (busy || token.trim().length < 4) && styles.buttonDisabled,
+                (busy || !isTokenComplete) && styles.buttonDisabled,
                 pressed && { opacity: 0.9 },
               ]}
             >

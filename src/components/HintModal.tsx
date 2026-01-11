@@ -5,11 +5,12 @@ import { useTheme } from "../theme/theme";
 type Props = {
   visible: boolean;
   title?: string;
+  emoji?: string;
   message: string;
   onClose: () => void;
 };
 
-export function HintModal({ visible, title = "Hint", message, onClose }: Props) {
+export function HintModal({ visible, title = "Hint", emoji = "💡", message, onClose }: Props) {
   const { colors, shadows, borderRadius } = useTheme();
   const styles = useMemo(() => makeStyles(colors, shadows, borderRadius), [colors, shadows, borderRadius]);
   return (
@@ -17,7 +18,7 @@ export function HintModal({ visible, title = "Hint", message, onClose }: Props) 
       <View style={styles.overlay}>
         <View style={styles.modal}>
           <View style={styles.iconContainer}>
-            <Text style={styles.icon}>💡</Text>
+            <Text style={styles.icon}>{emoji}</Text>
           </View>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>

@@ -4,7 +4,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import { RootStackParamList } from "../AppRoot";
 import { useTheme } from "../theme/theme";
-import { getTodayPuzzleByVariant } from "../lib/api";
+import { getPracticeRemainingByVariant, getTodayPuzzleByVariant } from "../lib/api";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../state/AuthProvider";
 import { useIap } from "../purchases/IapProvider";
@@ -171,8 +171,8 @@ export function HomeScreen({ navigation }: Props) {
         },
         content: {
           flexGrow: 1,
-          paddingTop: 0,
-          paddingBottom: 40,
+          paddingTop: 15,
+          paddingBottom: 5,
           justifyContent: "flex-start",
         },
         logoWrap: {
@@ -353,7 +353,9 @@ export function HomeScreen({ navigation }: Props) {
       style={styles.container}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
+      contentInsetAdjustmentBehavior="always"
     >
+      <View style={styles.inner}>
         {/* Centered logo */}
         <View style={styles.logoWrap}>
           <View style={styles.logoCard}>
@@ -365,7 +367,7 @@ export function HomeScreen({ navigation }: Props) {
       {/* Puzzle Card */}
       <View style={styles.todayCard}>
         <View style={styles.todayHeader}>
-          <Text style={styles.todayLabel}>WordCrack Puzzle</Text>
+          <Text style={styles.todayLabel}>Next Puzzle In</Text>
           <View style={styles.dateBadge}>
             <Text style={styles.dateText}>{today}</Text>
           </View>
@@ -411,11 +413,33 @@ export function HomeScreen({ navigation }: Props) {
           <Pressable
             accessibilityRole="button"
             onPress={() => {
-              Alert.alert("Practice Puzzles", "Choose a puzzle type:", [
-                { text: "Cancel", style: "cancel" },
-                { text: "Cipher Practice", onPress: () => navigation.navigate("Puzzle", { mode: "practice", variant: "cipher" }) },
-                { text: "Scramble Practice", onPress: () => navigation.navigate("Puzzle", { mode: "practice", variant: "scramble" }) },
-              ]);
+              void (async () => {
+                try {
+                  const [cipher, scramble] = await Promise.all([
+                    getPracticeRemainingByVariant("cipher"),
+                    getPracticeRemainingByVariant("scramble"),
+                  ]);
+
+                  Alert.alert("Practice Puzzles", "Choose a puzzle type:", [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                      text: `Cipher Practice (${cipher.remaining}/${cipher.limit} left)`,
+                      onPress: () => navigation.navigate("Puzzle", { mode: "practice", variant: "cipher" }),
+                    },
+                    {
+                      text: `Scramble Practice (${scramble.remaining}/${scramble.limit} left)`,
+                      onPress: () => navigation.navigate("Puzzle", { mode: "practice", variant: "scramble" }),
+                    },
+                  ]);
+                } catch {
+                  // If the preflight fails, still allow practice selection.
+                  Alert.alert("Practice Puzzles", "Choose a puzzle type:", [
+                    { text: "Cancel", style: "cancel" },
+                    { text: "Cipher Practice", onPress: () => navigation.navigate("Puzzle", { mode: "practice", variant: "cipher" }) },
+                    { text: "Scramble Practice", onPress: () => navigation.navigate("Puzzle", { mode: "practice", variant: "scramble" }) },
+                  ]);
+                }
+              })();
             }}
             style={({ pressed }) => [
               styles.practiceButton,
@@ -424,7 +448,7 @@ export function HomeScreen({ navigation }: Props) {
           >
             <Text style={styles.practiceButtonText}>Practice Puzzles</Text>
             <Text style={styles.practiceButtonSubtext}>
-              {iap.premium ? "Unlimited non‑leaderboard puzzles" : "Free: 5 per day (Unlimited with Premium)"}
+              5 per day (per puzzle type)
             </Text>
           </Pressable>
 
@@ -482,6 +506,7 @@ export function HomeScreen({ navigation }: Props) {
         <Text style={styles.settingsIcon}>⚙️</Text>
         <Text style={styles.settingsText}>Settings</Text>
       </Pressable>
+      </View>
     </ScrollView>
   );
 }

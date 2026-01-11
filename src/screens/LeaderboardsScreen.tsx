@@ -25,6 +25,14 @@ function getRankColor(rank: number, colors: any): string {
   return colors.background.card;
 }
 
+function parseEmojiAvatar(avatar_url: string | null | undefined): string | null {
+  if (!avatar_url) return null;
+  const s = String(avatar_url);
+  if (!s.startsWith("emoji:")) return null;
+  const e = s.slice("emoji:".length);
+  return e || null;
+}
+
 const TAB_LABELS: Record<Tab, { emoji: string; label: string }> = {
   global: { emoji: "🌍", label: "Global Rankings" },
   cipher: { emoji: "🔐", label: "This Hour's Cipher Rankings" },
@@ -32,7 +40,7 @@ const TAB_LABELS: Record<Tab, { emoji: string; label: string }> = {
   friends: { emoji: "👥", label: "Friends" },
 };
 
-export function LeaderboardsScreen({ route }: Props) {
+export function LeaderboardsScreen({ navigation, route }: Props) {
   const { user } = useAuth();
   const iap = useIap();
   const { colors, shadows, borderRadius } = useTheme();
@@ -48,7 +56,7 @@ export function LeaderboardsScreen({ route }: Props) {
   const [showPicker, setShowPicker] = useState(false);
 
   const isAnonymous = Boolean((user as any)?.is_anonymous) || (user as any)?.app_metadata?.provider === "anonymous";
-  const canUseFriends = !isAnonymous && iap.premium;
+  const canUseFriends = !isAnonymous;
 
   const load = async (t: Tab) => {
     try {
@@ -59,18 +67,10 @@ export function LeaderboardsScreen({ route }: Props) {
       if (t === "friends") setFriendsEntries(null);
       if (t === "cipher" || t === "scramble") {
         const entries = await getDailyLeaderboardByVariant(t === "cipher" ? "cipher" : "scramble");
-        // Non-premium: show top 3, but always show "Me" if present.
-        if (iap.premium) {
-          setDailyEntries(entries);
-        } else {
-          const top3 = entries.slice(0, 3);
-          const me = user?.id ? entries.find((e) => e.user_id === user.id) : undefined;
-          const merged = me && !top3.some((e) => e.user_id === me.user_id) ? [...top3, me] : top3;
-          setDailyEntries(merged);
-        }
+        setDailyEntries(entries);
       }
       if (t === "global") {
-        const ranks = await getGlobalRankings({ limit: iap.premium ? 100 : 25, min_solved: 5 });
+        const ranks = await getGlobalRankings({ limit: 100, min_solved: 5 });
         setGlobalRankings(ranks);
       }
       if (t === "friends") {
@@ -85,18 +85,14 @@ export function LeaderboardsScreen({ route }: Props) {
   };
 
   useEffect(() => {
-    // Friends requires Premium.
-    if (tab === "friends" && !canUseFriends) {
-      setTab("global");
-      return;
-    }
+    if (tab === "friends" && !canUseFriends) setTab("global");
     void load(tab);
   }, [tab, friendsVariant]);
 
   const selectTab = (t: Tab) => {
     if (t === "friends" && !canUseFriends) {
-      Alert.alert("WordCrack Premium", "Upgrade to unlock friends leaderboards.", [
-        { text: "Not now", style: "cancel" },
+      Alert.alert("Create an account", "Friends leaderboards require an account (Guest Mode can’t add friends yet).", [
+        { text: "OK" },
       ]);
       return;
     }
@@ -152,7 +148,7 @@ export function LeaderboardsScreen({ route }: Props) {
                     isDisabled && styles.pickerOptionTextDisabled,
                   ]}>
                     {TAB_LABELS[t].emoji} {TAB_LABELS[t].label}
-                    {isDisabled ? " (Premium)" : ""}
+                    {isDisabled ? " (Account required)" : ""}
                   </Text>
                   {isSelected && <Text style={styles.checkmark}>✓</Text>}
                 </Pressable>
@@ -163,6 +159,25 @@ export function LeaderboardsScreen({ route }: Props) {
       </Modal>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Guest CTA */}
+        {isAnonymous && (
+          <View style={styles.guestCard}>
+            <Text style={styles.guestTitle}>Playing as Guest</Text>
+            <Text style={styles.guestText}>Create an account to save progress across devices and use friends leaderboards.</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                // Route depends on how you want to upgrade: anonymous users go through UpgradeAccount first.
+                // (This keeps their current guest session and lets them convert it.)
+                navigation.navigate("UpgradeAccount", { postUpgradeTo: "Home" });
+              }}
+              style={({ pressed }) => [styles.guestButton, pressed && { opacity: 0.9 }]}
+            >
+              <Text style={styles.guestButtonText}>Create Account</Text>
+            </Pressable>
+          </View>
+        )}
+
         {/* Add Friend Section */}
         {tab === "friends" && canUseFriends && (
           <View style={styles.addFriendCard}>
@@ -260,7 +275,11 @@ export function LeaderboardsScreen({ route }: Props) {
               </View>
               <View style={styles.entryInfo}>
                 <View style={styles.userRow}>
-                  {e.avatar_url ? (
+                  {parseEmojiAvatar(e.avatar_url) ? (
+                    <View style={styles.avatarFallback}>
+                      <Text style={styles.avatarEmoji}>{parseEmojiAvatar(e.avatar_url)}</Text>
+                    </View>
+                  ) : e.avatar_url ? (
                     <Image source={{ uri: e.avatar_url }} style={styles.avatar} />
                   ) : (
                     <View style={styles.avatarFallback}>
@@ -291,7 +310,10 @@ export function LeaderboardsScreen({ route }: Props) {
         {tab === "global" ? (
           <View style={styles.globalRankingsSection}>
             <Text style={styles.globalRankingsTitle}>Global Rankings</Text>
-            <Text style={styles.globalRankingsSub}>Average final time across daily puzzles (min 5 solves)</Text>
+            <Text style={styles.globalRankingsSub}>
+              Average final time across daily puzzles{"\n"}
+              (5 Solved Puzzles to Unlock)
+            </Text>
 
             {(globalRankings ?? []).length === 0 && loading !== "daily" ? (
               <View style={styles.emptyState}>
@@ -306,7 +328,11 @@ export function LeaderboardsScreen({ route }: Props) {
               return (
                 <View key={`${e.user_id}:${i}`} style={[styles.rankRow, isMe && styles.rankRowMe]}>
                   <Text style={styles.rankNum}>#{i + 1}</Text>
-                  {e.avatar_url ? (
+                  {parseEmojiAvatar(e.avatar_url) ? (
+                    <View style={styles.rankAvatarFallback}>
+                      <Text style={styles.avatarEmojiSmall}>{parseEmojiAvatar(e.avatar_url)}</Text>
+                    </View>
+                  ) : e.avatar_url ? (
                     <Image source={{ uri: e.avatar_url }} style={styles.rankAvatar} />
                   ) : (
                     <View style={styles.rankAvatarFallback}>
@@ -334,20 +360,7 @@ export function LeaderboardsScreen({ route }: Props) {
           </View>
         ) : null}
 
-        {/* Upgrade CTA (daily) */}
-        {tab === "global" && !iap.premium ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => (isAnonymous ? Alert.alert("Create an account", "Create an account to upgrade to Premium.") : null)}
-            style={({ pressed }) => [
-              styles.upgradeHintCard,
-              pressed && { opacity: 0.9 },
-            ]}
-          >
-            <Text style={styles.upgradeHintTitle}>Want full leaderboards?</Text>
-            <Text style={styles.upgradeHintText}>Upgrade to WordCrack Premium to unlock full global + friends leaderboards.</Text>
-          </Pressable>
-        ) : null}
+        {/* Premium gating temporarily disabled: show full leaderboards for everyone. */}
 
         {/* Friends entries (single list) */}
         {tab === "friends" &&
@@ -365,7 +378,11 @@ export function LeaderboardsScreen({ route }: Props) {
               </View>
               <View style={styles.entryInfo}>
                 <View style={styles.userRow}>
-                  {e.avatar_url ? (
+                  {parseEmojiAvatar(e.avatar_url) ? (
+                    <View style={styles.avatarFallback}>
+                      <Text style={styles.avatarEmoji}>{parseEmojiAvatar(e.avatar_url)}</Text>
+                    </View>
+                  ) : e.avatar_url ? (
                     <Image source={{ uri: e.avatar_url }} style={styles.avatar} />
                   ) : (
                     <View style={styles.avatarFallback}>
@@ -480,6 +497,38 @@ function makeStyles(colors: any, shadows: any, borderRadius: any) {
   },
   scrollContent: {
     paddingBottom: 24,
+  },
+  guestCard: {
+    backgroundColor: colors.background.card,
+    borderRadius: borderRadius.xl,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "rgba(69, 170, 242, 0.35)",
+    ...shadows.small,
+  },
+  guestTitle: {
+    fontWeight: "900",
+    fontSize: 16,
+    color: colors.text.primary,
+    marginBottom: 6,
+  },
+  guestText: {
+    color: colors.text.secondary,
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  guestButton: {
+    backgroundColor: colors.primary.blue,
+    borderRadius: borderRadius.large,
+    paddingVertical: 12,
+    alignItems: "center",
+    ...shadows.small,
+  },
+  guestButtonText: {
+    color: colors.text.light,
+    fontWeight: "900",
+    fontSize: 16,
   },
   upgradeHintCard: {
     backgroundColor: colors.background.card,
@@ -696,6 +745,12 @@ function makeStyles(colors: any, shadows: any, borderRadius: any) {
   avatarFallbackText: {
     color: colors.text.light,
     fontWeight: "900",
+  },
+  avatarEmoji: {
+    fontSize: 18,
+  },
+  avatarEmojiSmall: {
+    fontSize: 18,
   },
   username: {
     fontWeight: "700",

@@ -15,6 +15,12 @@ verify_jwt = false
 [functions.submit-attempt]
 verify_jwt = false
 
+[functions.give-up]
+verify_jwt = false
+
+[functions.delete-account]
+verify_jwt = false
+
 [functions.get-friends-leaderboard]
 verify_jwt = false
 

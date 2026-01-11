@@ -129,13 +129,14 @@ export function generateCipherPuzzleFromTarget(args: {
 }
 
 export function generateScramblePuzzleFromTarget(args: {
-  target_word: string; // uppercase 5
+  target_word: string; // uppercase 6 (for scramble), but we infer length
   // legacy params (no longer used, kept so admin-create-puzzle doesn't break)
   unshifted_count?: number;
   shift_amount?: number;
   direction?: "left" | "right";
 }): { cipher_word: string; letter_sets: string[][]; start_idxs: number[]; meta: PuzzleGenMeta } {
   const target = args.target_word;
+  const len = target.length;
 
   // Scramble the target word (anagram) for display. Try to avoid returning the original order.
   const letters = target.split("");
@@ -150,7 +151,7 @@ export function generateScramblePuzzleFromTarget(args: {
   const cipher_is_scrambled = cipher_word !== target;
 
   // Each column cycles through the letters of the target word (same multiset), in a randomized order.
-  const letter_sets = Array.from({ length: WORD_LEN }, () => shuffle(letters));
+  const letter_sets = Array.from({ length: len }, () => shuffle(letters));
 
   // Choose a starting index for each column that is NOT the correct target letter.
   // This prevents the "already solved-looking" start state.

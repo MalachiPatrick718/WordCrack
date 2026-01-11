@@ -12,12 +12,12 @@ const INTRO_CONTENT = {
   cipher: {
     emoji: "🔐",
     title: "Cipher Puzzle",
-    description: "Each letter has been shifted by the same amount (A-Z wraps around). Use the theme hint to help crack the code!",
+    description: "Each letter has been shifted to the left or to the right a number of times. Use the theme and your best shifting skills to help crack the code!",
   },
   scramble: {
     emoji: "🔀",
     title: "Scramble Puzzle",
-    description: "The letters of the word have been shuffled. Rearrange them into the correct order to find the answer.",
+    description: "A 6-letter word is scrambled. Rearrange the letters into the correct order to find the answer.",
   },
 };
 

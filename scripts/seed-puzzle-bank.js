@@ -16,9 +16,9 @@ function getArg(name) {
   return process.argv[i + 1] ?? null;
 }
 
-function assertUpperAlpha5(s) {
-  if (typeof s !== "string" || !/^[A-Z]{5}$/.test(s)) {
-    throw new Error(`Invalid target_word "${s}". Expected 5 uppercase letters A-Z.`);
+function assertUpperAlpha(s, len) {
+  if (typeof s !== "string" || !new RegExp(`^[A-Z]{${len}}$`).test(s)) {
+    throw new Error(`Invalid target_word "${s}". Expected ${len} uppercase letters A-Z.`);
   }
 }
 
@@ -27,6 +27,9 @@ async function main() {
   const filePath = path.resolve(process.cwd(), fileArg || "puzzle_bank.json");
   const kindArg = (getArg("--kind") ?? "daily").trim();
   const kind = kindArg === "practice" ? "practice" : "daily";
+  const variantArg = (getArg("--variant") ?? "cipher").trim().toLowerCase();
+  const variant = variantArg === "scramble" ? "scramble" : "cipher";
+  const len = variant === "cipher" ? 5 : 6;
 
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -41,9 +44,9 @@ async function main() {
   const rows = parsed.map((x, idx) => {
     const target_word = String(x?.target_word ?? "").trim();
     const theme_hint = String(x?.theme_hint ?? "").trim();
-    assertUpperAlpha5(target_word);
+    assertUpperAlpha(target_word, len);
     if (!theme_hint) throw new Error(`Row ${idx} missing theme_hint for ${target_word}.`);
-    return { target_word, theme_hint, kind, enabled: x?.enabled == null ? true : Boolean(x.enabled) };
+    return { target_word, theme_hint, kind, variant, enabled: x?.enabled == null ? true : Boolean(x.enabled) };
   });
 
   const supabase = createClient(url, key, { auth: { persistSession: false } });
@@ -52,7 +55,7 @@ async function main() {
   const { error } = await supabase.from("puzzle_bank").upsert(rows, { onConflict: "target_word" });
   if (error) throw new Error(error.message);
 
-  console.log(`Seeded puzzle_bank: ${rows.length} rows from ${path.basename(filePath)}`);
+  console.log(`Seeded puzzle_bank: ${rows.length} rows (${variant}, ${kind}) from ${path.basename(filePath)}`);
 }
 
 main().catch((e) => {

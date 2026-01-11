@@ -22,7 +22,6 @@ Deno.serve(async (req) => {
     const attempt_id = String(body?.attempt_id ?? "");
     const guess_word = String(body?.guess_word ?? "");
     if (!attempt_id) return json({ error: "Missing attempt_id" }, { status: 400, headers: corsHeaders });
-    assertUpperAlpha(guess_word, 5);
 
     const admin = supabaseAdmin();
 
@@ -46,10 +45,14 @@ Deno.serve(async (req) => {
 
     const { data: puzzle, error: puzzleErr } = await admin
       .from("puzzles")
-      .select("id,target_word,puzzle_date")
+      .select("id,target_word,puzzle_date,variant")
       .eq("id", attempt.puzzle_id)
       .single();
     if (puzzleErr) return json({ error: puzzleErr.message }, { status: 500, headers: corsHeaders });
+
+    const variant = String((puzzle as any)?.variant ?? "cipher");
+    const len = variant === "scramble" ? 6 : 5;
+    assertUpperAlpha(guess_word, len);
 
     if (guess_word !== puzzle.target_word) {
       return json({ correct: false }, { headers: corsHeaders });

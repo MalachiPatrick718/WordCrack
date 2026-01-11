@@ -225,25 +225,7 @@ export function PaywallScreen({ navigation }: Props) {
           </View>
         </View>
 
-        {__DEV__ ? (
-          <View style={styles.devCard}>
-            <Text style={styles.devTitle}>Developer</Text>
-            <Text style={styles.devText}>Force Premium on this device (testing only).</Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => void iap.setPremiumTestEnabled(!iap.premiumTestEnabled)}
-              style={({ pressed }) => [
-                styles.devButton,
-                iap.premiumTestEnabled && styles.devButtonOn,
-                pressed && { opacity: 0.9 },
-              ]}
-            >
-              <Text style={styles.devButtonText}>
-                {iap.premiumTestEnabled ? "Disable Test Premium" : "Enable Test Premium"}
-              </Text>
-            </Pressable>
-          </View>
-        ) : null}
+        {/* Removed: test premium toggle (we’ll reintroduce subscription gating when ready). */}
       </ScrollView>
     </View>
   );

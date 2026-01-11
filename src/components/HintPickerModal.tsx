@@ -6,15 +6,15 @@ import type { HintType } from "../lib/api";
 type Item = { type: HintType; title: string; subtitle: string };
 
 const SCRAMBLE_ITEMS: Item[] = [
-  { type: "check_positions", title: "Check correct positions", subtitle: "+5s" },
-  { type: "reveal_position", title: "Reveal a position", subtitle: "+8s" },
-  { type: "reveal_theme", title: "Reveal theme hint", subtitle: "+6s" },
+  { type: "check_positions", title: "Check correct positions", subtitle: "Cost: +5s" },
+  { type: "reveal_position", title: "Reveal a position", subtitle: "Cost: +8s" },
+  { type: "reveal_theme", title: "Reveal theme hint", subtitle: "Cost: +10s" },
 ];
 
 const CIPHER_ITEMS: Item[] = [
-  { type: "shift_amount", title: "Shift amount", subtitle: "+5s" },
-  { type: "unshifted_positions", title: "Unshifted positions", subtitle: "+10s" },
-  { type: "reveal_theme", title: "Reveal theme hint", subtitle: "+6s" },
+  { type: "check_positions", title: "Check correct positions", subtitle: "Cost: +5s" },
+  { type: "shift_amount", title: "Shift amount", subtitle: "Cost: +8s" },
+  { type: "unshifted_positions", title: "Unshifted positions", subtitle: "Cost: +10s" },
 ];
 
 type Props = {
@@ -108,12 +108,14 @@ function makeStyles(colors: any, shadows: any, borderRadius: any) {
     ...shadows.small,
   },
   itemDisabled: {
-    backgroundColor: "#F3F5F7",
+    // Use a neutral grey that reads as "disabled" in both light + dark themes.
+    backgroundColor: "rgba(150, 150, 150, 0.35)",
+    borderColor: "rgba(150, 150, 150, 0.55)",
     shadowOpacity: 0,
     elevation: 0,
   },
   itemTitle: { fontSize: 16, fontWeight: "800", color: colors.text.primary },
-  itemSub: { marginTop: 4, fontSize: 12, color: colors.text.secondary },
+  itemSub: { marginTop: 6, fontSize: 14, fontWeight: "800", color: colors.text.secondary },
   chev: { fontSize: 24, color: colors.primary.darkBlue, marginLeft: 10 },
   cancel: {
     marginTop: 14,

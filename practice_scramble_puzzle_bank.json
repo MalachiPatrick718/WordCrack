@@ -1,0 +1,13 @@
+[
+  { "target_word": "ACCESS", "theme_hint": "Permission" },
+  { "target_word": "CIRCLE", "theme_hint": "Round shape" },
+  { "target_word": "DETAIL", "theme_hint": "Specifics" },
+  { "target_word": "FORMAT", "theme_hint": "Structure" },
+  { "target_word": "GLOBAL", "theme_hint": "Worldwide" },
+  { "target_word": "HIDDEN", "theme_hint": "Not visible" },
+  { "target_word": "JUNGLE", "theme_hint": "Dense forest" },
+  { "target_word": "LAUNCH", "theme_hint": "Start an event" },
+  { "target_word": "MEMORY", "theme_hint": "Recall" },
+  { "target_word": "RESULT", "theme_hint": "Outcome" }
+]
+

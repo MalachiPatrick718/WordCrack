@@ -4,7 +4,7 @@ export const HOW_TO_PLAY_SLIDES: HowToPlaySlide[] = [
   {
     emoji: "🧩",
     title: "Crack the Word",
-    body: "Solve the 5-letter word as fast as you can. New puzzles every hour—everyone gets the same challenge!",
+    body: "New puzzles every hour—everyone gets the same challenge. Cipher puzzles are 5 letters. Scramble puzzles are 6 letters.",
   },
   {
     emoji: "🔐",
@@ -14,17 +14,17 @@ export const HOW_TO_PLAY_SLIDES: HowToPlaySlide[] = [
   {
     emoji: "🔀",
     title: "Scramble Puzzle",
-    body: "The letters are jumbled up. Rearrange them to spell the correct word.",
+    body: "A 6-letter word is jumbled up. Rearrange the letters to spell the correct word.",
   },
   {
     emoji: "🎮",
     title: "How to Play",
-    body: "Use ▲/▼ to cycle through letters in each column. Use hints if stuck (adds time penalty). Tap Start when ready!",
+    body: "Use ▲/▼ to cycle letters in each column (5 columns in Cipher, 6 columns in Scramble). Use hints if stuck (adds time penalty). Tap Start when ready!",
   },
   {
     emoji: "🏆",
     title: "Compete & Win",
-    body: "Race for the fastest time on daily leaderboards. Go Premium for unlimited practice and friends!",
+    body: "Race for the fastest time on daily leaderboards. Practice puzzles reset daily (5 per type).",
   },
 ];
 

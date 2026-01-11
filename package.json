@@ -7,12 +7,16 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "seed:puzzle-bank": "node scripts/seed-puzzle-bank.js --kind daily --file puzzle_bank.json",
-    "seed:practice-puzzle-bank": "node scripts/seed-puzzle-bank.js --kind practice --file practice_puzzle_bank.json",
+    "seed:puzzle-bank": "node scripts/seed-puzzle-bank.js --kind daily --variant cipher --file puzzle_bank.json",
+    "seed:practice-puzzle-bank": "node scripts/seed-puzzle-bank.js --kind practice --variant cipher --file practice_puzzle_bank.json",
+    "seed:scramble-puzzle-bank": "node scripts/seed-puzzle-bank.js --kind daily --variant scramble --file scramble_puzzle_bank.json",
+    "seed:practice-scramble-puzzle-bank": "node scripts/seed-puzzle-bank.js --kind practice --variant scramble --file practice_scramble_puzzle_bank.json",
     "puzzle-bank:append": "node scripts/append-puzzle-bank.js --count 30",
     "puzzle-bank:append:dry": "node scripts/append-puzzle-bank.js --count 30 --dry-run",
-    "puzzle-bank:replenish": "node scripts/replenish-puzzle-bank.js --count 30",
-    "puzzle-bank:replenish:buffered": "node scripts/replenish-puzzle-bank.js --count 30 --min-buffer 1000"
+    "puzzle-bank:replenish": "node scripts/replenish-puzzle-bank.js --count 30 --kind daily --variant cipher",
+    "puzzle-bank:replenish:scramble": "node scripts/replenish-puzzle-bank.js --count 30 --kind daily --variant scramble",
+    "puzzle-bank:replenish:buffered": "node scripts/replenish-puzzle-bank.js --count 30 --kind daily --variant cipher --min-buffer 1000",
+    "puzzle-bank:replenish:scramble:buffered": "node scripts/replenish-puzzle-bank.js --count 30 --kind daily --variant scramble --min-buffer 1000"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

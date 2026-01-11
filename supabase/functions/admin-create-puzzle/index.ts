@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
     if (!Number.isFinite(puzzle_hour) || puzzle_hour < 0 || puzzle_hour > 23) {
       return json({ error: "Invalid puzzle_hour (expected 0-23)" }, { status: 400, headers: corsHeaders });
     }
-    assertUpperAlpha(target_word, 5);
+    assertUpperAlpha(target_word, variant === "cipher" ? 5 : 6);
 
     const gen =
       variant === "cipher"

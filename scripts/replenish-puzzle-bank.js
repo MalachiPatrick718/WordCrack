@@ -1,5 +1,7 @@
 /**
- * Replenish Supabase `puzzle_bank` with N new unique 5-letter words.
+ * Replenish Supabase `puzzle_bank` with N new unique words for a specific variant:
+ * - cipher: 5-letter words
+ * - scramble: 6-letter words
  *
  * - Does NOT modify puzzle_bank.json
  * - Avoids duplicates by fetching existing target_word values from the DB
@@ -21,9 +23,9 @@ function getArg(name) {
   return process.argv[i + 1] ?? null;
 }
 
-function assertUpperAlpha5(s) {
-  if (typeof s !== "string" || !/^[A-Z]{5}$/.test(s)) {
-    throw new Error(`Invalid word "${s}". Expected 5 uppercase letters A-Z.`);
+function assertUpperAlpha(s, len) {
+  if (typeof s !== "string" || !new RegExp(`^[A-Z]{${len}}$`).test(s)) {
+    throw new Error(`Invalid word "${s}". Expected ${len} uppercase letters A-Z.`);
   }
 }
 
@@ -53,14 +55,14 @@ function pickHint() {
   return GENERIC_HINTS[crypto.randomInt(0, GENERIC_HINTS.length)];
 }
 
-function readWordlist5() {
-  const p = path.resolve(__dirname, "wordlist_5.txt");
+function readWordlist(len) {
+  const p = path.resolve(__dirname, len === 6 ? "wordlist_6.txt" : "wordlist_5.txt");
   const raw = fs.readFileSync(p, "utf8");
   const out = [];
   for (const line of raw.split(/\r?\n/)) {
     const w = line.trim().toUpperCase();
     if (!w) continue;
-    if (!/^[A-Z]{5}$/.test(w)) continue;
+    if (!new RegExp(`^[A-Z]{${len}}$`).test(w)) continue;
     out.push(w);
   }
   return Array.from(new Set(out));
@@ -100,6 +102,9 @@ async function main() {
   const minBuffer = Math.max(0, Math.min(5000, Number(getArg("--min-buffer") ?? "0")));
   const kindArg = (getArg("--kind") ?? "daily").trim();
   const kind = kindArg === "practice" ? "practice" : "daily";
+  const variantArg = (getArg("--variant") ?? "cipher").trim().toLowerCase();
+  const variant = variantArg === "scramble" ? "scramble" : "cipher";
+  const len = variant === "cipher" ? 5 : 6;
 
   const supabase = createClient(url, key, { auth: { persistSession: false } });
   const existing = await fetchAllExistingWords(supabase);
@@ -110,17 +115,18 @@ async function main() {
     return;
   }
 
-  const candidates = readWordlist5();
+  const candidates = readWordlist(len);
   const picked = [];
   for (const w of shuffle(candidates)) {
     if (picked.length >= count) break;
     if (existing.has(w)) continue;
-    assertUpperAlpha5(w);
+    assertUpperAlpha(w, len);
     existing.add(w);
     picked.push({
       target_word: w,
       theme_hint: pickHint(),
       kind,
+      variant,
       enabled: true,
       // Don't jump the queue ahead of older entries:
       // mark as "recently used" so the LRU selector continues through older puzzles.
@@ -130,14 +136,14 @@ async function main() {
 
   if (picked.length < count) {
     throw new Error(
-      `Could only pick ${picked.length}/${count} unique words. Add more to scripts/wordlist_5.txt.`,
+      `Could only pick ${picked.length}/${count} unique words. Add more to scripts/wordlist_${len}.txt.`,
     );
   }
 
   const { error } = await supabase.from("puzzle_bank").upsert(picked, { onConflict: "target_word" });
   if (error) throw new Error(error.message);
 
-  console.log(`Inserted ${picked.length} new puzzle_bank entries.`);
+  console.log(`Inserted ${picked.length} new puzzle_bank entries (${variant}, ${kind}).`);
   console.log(picked.map((p) => p.target_word).join(", "));
 }
 

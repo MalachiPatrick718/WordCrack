@@ -15,16 +15,47 @@ Deno.serve(async (req) => {
     const admin = supabaseAdmin();
 
     // Delete user's attempts
-    await admin.from("attempts").delete().eq("user_id", user.id);
+    {
+      const { error } = await admin.from("attempts").delete().eq("user_id", user.id);
+      if (error) console.error("delete-account: failed deleting attempts", error);
+    }
 
-    // Delete user's friendships (both directions)
-    await admin.from("friendships").delete().or(`user_id.eq.${user.id},friend_id.eq.${user.id}`);
+    // Delete user's friends rows (both directions)
+    {
+      const { error } = await admin
+        .from("friends")
+        .delete()
+        .or(`user_id.eq.${user.id},friend_user_id.eq.${user.id}`);
+      if (error) console.error("delete-account: failed deleting friends", error);
+    }
 
     // Delete user's feedback
-    await admin.from("feedback").delete().eq("user_id", user.id);
+    {
+      const { error } = await admin.from("feedback").delete().eq("user_id", user.id);
+      if (error) console.error("delete-account: failed deleting feedback", error);
+    }
 
     // Delete user's profile
-    await admin.from("profiles").delete().eq("user_id", user.id);
+    {
+      const { error } = await admin.from("profiles").delete().eq("user_id", user.id);
+      if (error) console.error("delete-account: failed deleting profile", error);
+    }
+
+    // Delete notification prefs (optional table)
+    {
+      const { error } = await admin.from("notification_prefs").delete().eq("user_id", user.id);
+      if (error) console.error("delete-account: failed deleting notification_prefs", error);
+    }
+
+    // Delete purchases / entitlements (optional tables)
+    {
+      const { error } = await admin.from("purchases").delete().eq("user_id", user.id);
+      if (error) console.error("delete-account: failed deleting purchases", error);
+    }
+    {
+      const { error } = await admin.from("entitlements").delete().eq("user_id", user.id);
+      if (error) console.error("delete-account: failed deleting entitlements", error);
+    }
 
     // Delete the auth user
     const { error: authError } = await admin.auth.admin.deleteUser(user.id);
