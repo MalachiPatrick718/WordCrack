@@ -1,12 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
-import appIcon from "../../../WordCrack/assets/icon.png";
 
 export function SiteHeader() {
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
   return (
     <header className="mx-auto max-w-6xl px-6 py-6 flex items-center justify-between">
       <Link href="/" className="flex items-center gap-3">
-        <Image src={appIcon} alt="WordCrack" width={36} height={36} priority />
+        <Image src={`${basePath}/logo.svg`} alt="WordCrack" width={36} height={36} priority />
         <span className="font-extrabold tracking-tight text-lg">WordCrack</span>
       </Link>
       <nav className="flex items-center gap-5 text-sm">

@@ -1,7 +1,6 @@
 import Image from "next/image";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
-import appIcon from "../../../WordCrack/assets/icon.png";
 
 function StoreButton(props: { kind: "ios" | "android"; href?: string }) {
   const label = props.kind === "ios" ? "Download on the App Store" : "Get it on Google Play";
@@ -26,6 +25,7 @@ function StoreButton(props: { kind: "ios" | "android"; href?: string }) {
 }
 
 export default function HomePage() {
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
   return (
     <div>
       <SiteHeader />
@@ -63,7 +63,7 @@ export default function HomePage() {
             <div className="relative">
               <div className="rounded-3xl border border-border bg-card p-6 shadow-glow">
                 <div className="flex items-center gap-3">
-                  <Image src={appIcon} alt="WordCrack" width={44} height={44} priority />
+                  <Image src={`${basePath}/logo.svg`} alt="WordCrack" width={44} height={44} priority />
                   <div>
                     <div className="font-extrabold">WordCrack</div>
                     <div className="text-xs text-white/60">Scrambled word • 5 columns • penalties for hints</div>
