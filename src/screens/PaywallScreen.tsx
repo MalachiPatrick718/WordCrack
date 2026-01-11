@@ -41,7 +41,8 @@ export function PaywallScreen({ navigation }: Props) {
         navigation.replace("UpgradeAccount", { postUpgradeTo: "Paywall" });
         return;
       }
-      await iap.buy(ctaProduct);
+      if (!user?.id) throw new Error("Not signed in");
+      await iap.buy(ctaProduct, user.id);
       Alert.alert("Success", "WordCrack Premium is now active.");
       navigation.goBack();
     } catch (e: any) {

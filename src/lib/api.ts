@@ -244,4 +244,27 @@ export async function deleteAccount(): Promise<{ ok: boolean }> {
   return await invoke<{ ok: boolean }>("delete-account", {});
 }
 
+export type IapStatus = {
+  entitlement: { premium_until: string | null; updated_at: string | null };
+  purchases: Array<{
+    platform: "ios" | "android";
+    product_id: string;
+    status: string;
+    purchase_time: string | null;
+    expires_at: string | null;
+    updated_at?: string | null;
+    original_transaction_id?: string | null;
+    transaction_id?: string | null;
+    order_id?: string | null;
+    package_name?: string | null;
+    raw_meta?: { notificationType?: string; subtype?: string } | null;
+  }>;
+};
+
+export async function getIapStatus(): Promise<IapStatus> {
+  const { data, error } = await supabase.functions.invoke("get-iap-status", { method: "GET" });
+  if (error) throw error;
+  return data as any;
+}
+
 

@@ -6,10 +6,9 @@ import { getJson, setJson } from "../lib/storage";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../state/AuthProvider";
 import { useIap } from "../purchases/IapProvider";
-import { PRODUCTS } from "../purchases/products";
 import { useTheme, type ThemePreference } from "../theme/theme";
 import { disableDailyReminder, enableDailyReminder, getDailyReminderState, sendTestNewPuzzleNotification } from "../lib/notifications";
-import { deleteAccount, submitFeedback } from "../lib/api";
+import { deleteAccount, getIapStatus, submitFeedback, type IapStatus } from "../lib/api";
 import { RootStackParamList } from "../AppRoot";
 
 type Prefs = {
@@ -29,12 +28,19 @@ export function SettingsScreen({ navigation }: Props) {
   const [sendingFeedback, setSendingFeedback] = useState(false);
   const [showComingSoon, setShowComingSoon] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [iapDebugEnabled, setIapDebugEnabled] = useState(false);
+  const [debugTapCount, setDebugTapCount] = useState(0);
+  const [iapStatus, setIapStatus] = useState<IapStatus | null>(null);
+  const [iapStatusLoading, setIapStatusLoading] = useState(false);
+  const [iapSyncing, setIapSyncing] = useState(false);
+  const [iapLastSyncAt, setIapLastSyncAt] = useState<number | null>(null);
 
   useEffect(() => {
     getJson<Prefs>("wordcrack:prefs").then((v) => v && setPrefs(v));
     getDailyReminderState().then((s) => {
       setPrefs((p) => ({ ...p, pushEnabled: s.enabled }));
     });
+    getJson<boolean>("wordcrack:iapDebug").then((v) => setIapDebugEnabled(Boolean(v)));
   }, []);
 
   useEffect(() => {
@@ -87,11 +93,39 @@ export function SettingsScreen({ navigation }: Props) {
   };
 
   const isAnonymous = Boolean((user as any)?.is_anonymous);
+  const showIapDebug = (__DEV__ || iapDebugEnabled) && !isAnonymous;
   const entitlementLabel = useMemo(() => {
     if (iap.loading) return "Checking…";
     if (!iap.premium) return "Free";
     return "WordCrack Premium";
   }, [iap.loading, iap.premium]);
+
+  const fmtTs = (iso: string | null | undefined) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleString();
+  };
+
+  const loadIap = async () => {
+    if (!user || isAnonymous) return;
+    try {
+      setIapStatusLoading(true);
+      const s = await getIapStatus();
+      setIapStatus(s);
+    } catch (e: any) {
+      // Keep this quiet unless debug is enabled.
+      if (showIapDebug) Alert.alert("IAP status failed", e?.message ?? "Unknown error");
+    } finally {
+      setIapStatusLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!showIapDebug) return;
+    void loadIap();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showIapDebug, user?.id]);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -300,7 +334,13 @@ export function SettingsScreen({ navigation }: Props) {
           {!iap.premium ? (
             <Pressable
               accessibilityRole="button"
-              onPress={() => setShowComingSoon(true)}
+              onPress={() => {
+                if (isAnonymous) {
+                  navigation.navigate("UpgradeAccount", { postUpgradeTo: "Paywall" });
+                  return;
+                }
+                navigation.navigate("Paywall");
+              }}
               style={({ pressed }) => [
                 styles.premiumButton,
                 pressed && { opacity: 0.9 },
@@ -315,6 +355,8 @@ export function SettingsScreen({ navigation }: Props) {
               try {
                 await iap.restore();
                 Alert.alert("Restored", "Your purchases have been synced.");
+                setIapLastSyncAt(Date.now());
+                if (showIapDebug) await loadIap();
               } catch (e: any) {
                 Alert.alert("Restore failed", e?.message ?? "Unknown error");
               }
@@ -328,6 +370,84 @@ export function SettingsScreen({ navigation }: Props) {
           </Pressable>
         </View>
       </View>
+
+      {/* IAP Debug / Status (hidden toggle; available in TestFlight when enabled) */}
+      {showIapDebug ? (
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardIcon}>🧪</Text>
+            <Text style={styles.cardTitle}>Subscription Status</Text>
+          </View>
+          <Text style={styles.cardDescription}>
+            Use this to confirm Premium status updates after purchase/renewal/cancel.
+          </Text>
+
+          <View style={{ marginTop: 10, gap: 6 }}>
+            <Text style={styles.kv}>Premium active: <Text style={styles.kvValue}>{iap.premium ? "Yes" : "No"}</Text></Text>
+            <Text style={styles.kv}>premium_until: <Text style={styles.kvValue}>{fmtTs(iapStatus?.entitlement?.premium_until)}</Text></Text>
+            <Text style={styles.kv}>entitlement updated: <Text style={styles.kvValue}>{fmtTs(iapStatus?.entitlement?.updated_at)}</Text></Text>
+            <Text style={styles.kv}>last sync: <Text style={styles.kvValue}>{iapLastSyncAt ? new Date(iapLastSyncAt).toLocaleString() : "—"}</Text></Text>
+          </View>
+
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
+            <Pressable
+              accessibilityRole="button"
+              disabled={iapStatusLoading || iapSyncing}
+              onPress={() => void loadIap()}
+              style={({ pressed }) => [
+                styles.smallButton,
+                (iapStatusLoading || iapSyncing) && { opacity: 0.55 },
+                pressed && !(iapStatusLoading || iapSyncing) && { opacity: 0.9 },
+              ]}
+            >
+              <Text style={styles.smallButtonText}>{iapStatusLoading ? "Refreshing…" : "Refresh status"}</Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              disabled={iapStatusLoading || iapSyncing}
+              onPress={() => {
+                void (async () => {
+                  try {
+                    setIapSyncing(true);
+                    await iap.restore();
+                    setIapLastSyncAt(Date.now());
+                    await loadIap();
+                    Alert.alert("Synced", "Subscription status refreshed.");
+                  } catch (e: any) {
+                    Alert.alert("Sync failed", e?.message ?? "Unknown error");
+                  } finally {
+                    setIapSyncing(false);
+                  }
+                })();
+              }}
+              style={({ pressed }) => [
+                styles.smallButtonPrimary,
+                (iapStatusLoading || iapSyncing) && { opacity: 0.55 },
+                pressed && !(iapStatusLoading || iapSyncing) && { opacity: 0.92 },
+              ]}
+            >
+              <Text style={styles.smallButtonPrimaryText}>{iapSyncing ? "Syncing…" : "Sync subscription"}</Text>
+            </Pressable>
+          </View>
+
+          <View style={{ marginTop: 12 }}>
+            <Text style={[styles.cardDescription, { marginBottom: 8 }]}>Recent purchase records:</Text>
+            {(iapStatus?.purchases ?? []).length ? (
+              (iapStatus?.purchases ?? []).slice(0, 4).map((p, idx) => (
+                <View key={`${p.platform}-${p.product_id}-${idx}`} style={styles.purchaseRow}>
+                  <Text style={styles.purchaseRowText}>
+                    {p.platform.toUpperCase()} • {p.product_id} • {p.status}
+                    {p.expires_at ? ` • exp ${new Date(p.expires_at).toLocaleString()}` : ""}
+                  </Text>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.cardDescription}>No purchases found yet.</Text>
+            )}
+          </View>
+        </View>
+      ) : null}
 
       {/* Legal Section */}
       <View style={styles.card}>
@@ -434,7 +554,24 @@ export function SettingsScreen({ navigation }: Props) {
         </Pressable>
       </View>
 
-      <Text style={styles.version}>WordCrack v1.0.0</Text>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => {
+          const next = debugTapCount + 1;
+          if (next >= 7) {
+            const enabled = !iapDebugEnabled;
+            setDebugTapCount(0);
+            setIapDebugEnabled(enabled);
+            void setJson("wordcrack:iapDebug", enabled);
+            Alert.alert("Debug", enabled ? "Subscription debug enabled." : "Subscription debug disabled.");
+          } else {
+            setDebugTapCount(next);
+          }
+        }}
+        style={({ pressed }) => [pressed && { opacity: 0.8 }]}
+      >
+        <Text style={styles.version}>WordCrack v1.0.0</Text>
+      </Pressable>
 
       {/* Coming Soon Modal */}
       <Modal
@@ -643,6 +780,40 @@ const makeStyles = (colors: any, shadows: any, borderRadius: any) => StyleSheet.
     fontWeight: "600",
     fontSize: 14,
   },
+  kv: { color: colors.text.secondary, fontSize: 13, fontWeight: "700" },
+  kvValue: { color: colors.text.primary, fontWeight: "800" },
+  smallButton: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    borderRadius: borderRadius.medium,
+    backgroundColor: colors.background.main,
+    borderWidth: 1,
+    borderColor: colors.ui.border,
+    ...shadows.small,
+  },
+  smallButtonText: { color: colors.text.primary, fontWeight: "800", fontSize: 13 },
+  smallButtonPrimary: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    borderRadius: borderRadius.medium,
+    backgroundColor: colors.primary.blue,
+    ...shadows.small,
+  },
+  smallButtonPrimaryText: { color: colors.text.light, fontWeight: "900", fontSize: 13 },
+  purchaseRow: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: borderRadius.medium,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1,
+    borderColor: colors.ui.border,
+    marginBottom: 8,
+  },
+  purchaseRowText: { color: colors.text.secondary, fontSize: 12, fontWeight: "700" },
   legalLinks: {
     gap: 8,
   },

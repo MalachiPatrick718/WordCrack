@@ -39,3 +39,12 @@ verify_jwt = false
 [functions.validate-purchase]
 verify_jwt = false
 
+[functions.apple-iap-webhook]
+verify_jwt = false
+
+[functions.google-iap-webhook]
+verify_jwt = false
+
+[functions.get-iap-status]
+verify_jwt = false
+

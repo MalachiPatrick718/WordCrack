@@ -8,7 +8,6 @@ These IDs are used by the app:
 
 - `wordcrack_premium_monthly` (subscription)
 - `wordcrack_premium_annual` (subscription)
-- `wordcrack_premium_lifetime` (one-time / non-consumable)
 
 They live in `src/purchases/products.ts`.
 
@@ -29,8 +28,7 @@ Insert your products once:
 ```sql
 insert into public.products (id, type) values
   ('wordcrack_premium_monthly','subscription'),
-  ('wordcrack_premium_annual','subscription'),
-  ('wordcrack_premium_lifetime','non_consumable')
+  ('wordcrack_premium_annual','subscription')
 on conflict (id) do nothing;
 ```
 

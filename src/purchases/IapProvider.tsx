@@ -21,7 +21,7 @@ type IapState = {
     currency?: string | null;
   }>>;
   restore: () => Promise<void>;
-  buy: (productId: ProductId) => Promise<void>;
+  buy: (productId: ProductId, userId: string) => Promise<void>;
 };
 
 const Ctx = createContext<IapState | null>(null);
@@ -117,6 +117,17 @@ export function IapProvider(props: { children: React.ReactNode }) {
       }
     })();
 
+    // If the user signs in/out, refresh entitlement so premium state updates immediately.
+    const { data: authSub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!mounted) return;
+      if (!session?.user) {
+        setPremiumUntil(null);
+        return;
+      }
+      const ent = await refreshEntitlement();
+      if (mounted) setPremiumUntil(ent.premiumUntil);
+    });
+
     const subPurchase = RNIap.purchaseUpdatedListener(async (purchase) => {
       if (validatingRef.current) return;
       validatingRef.current = true;
@@ -159,6 +170,7 @@ export function IapProvider(props: { children: React.ReactNode }) {
 
     return () => {
       mounted = false;
+      authSub.subscription.unsubscribe();
       subPurchase.remove();
       subError.remove();
       void RNIap.endConnection();
@@ -199,12 +211,20 @@ export function IapProvider(props: { children: React.ReactNode }) {
     setPremiumUntil(ent.premiumUntil);
   };
 
-  const buy = async (productId: ProductId) => {
+  const buy = async (productId: ProductId, userId: string) => {
     const isSub = productId === PRODUCTS.premium_monthly || productId === PRODUCTS.premium_annual;
     const type: RNIap.MutationRequestPurchaseArgs["type"] = isSub ? "subs" : "in-app";
     const request =
       Platform.OS === "ios"
-        ? ({ apple: { sku: productId, andDangerouslyFinishTransactionAutomatically: false } } as any)
+        ? ({
+            apple: {
+              sku: productId,
+              andDangerouslyFinishTransactionAutomatically: false,
+              // Critical for "seamless": lets Apple S2S notifications map transactions back to a user.
+              // Must be a UUID (Supabase auth user_id is a UUID).
+              appAccountToken: userId,
+            },
+          } as any)
         : ({ google: { skus: [productId] } } as any);
 
     await RNIap.requestPurchase({ type, request });

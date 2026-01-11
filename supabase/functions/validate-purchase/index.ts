@@ -5,6 +5,7 @@ import { supabaseAdmin, getEnv } from "../_shared/supabase.ts";
 import { json } from "../_shared/utils.ts";
 import { withCors } from "../_shared/http.ts";
 import { getGoogleAccessToken } from "../_shared/google.ts";
+import { recomputeEntitlementForUser } from "../_shared/iap.ts";
 
 type Platform = "ios" | "android";
 type ProductType = "subscription" | "non_consumable";
@@ -199,17 +200,8 @@ Deno.serve(async (req: Request) => {
         .single();
       if (upErr) return json({ error: upErr.message }, { status: 500, headers: corsHeaders });
 
-      const premium_until = productType === "subscription" ? expires_at : new Date(Date.UTC(2999, 0, 1)).toISOString();
-      const { data: ent, error: entErr } = await admin
-        .from("entitlements")
-        .upsert(
-          { user_id: user.id, premium_until },
-          { onConflict: "user_id" },
-        )
-        .select("premium_until")
-        .single();
-      if (entErr) return json({ error: entErr.message }, { status: 500, headers: corsHeaders });
-
+      await recomputeEntitlementForUser(admin, user.id);
+      const { data: ent } = await admin.from("entitlements").select("premium_until").eq("user_id", user.id).maybeSingle();
       return json({ ok: true, entitlement: ent, purchase: upserted }, { headers: corsHeaders });
     }
 
@@ -242,17 +234,8 @@ Deno.serve(async (req: Request) => {
       .single();
     if (upErr) return json({ error: upErr.message }, { status: 500, headers: corsHeaders });
 
-    const premium_until = productType === "subscription"
-      ? verified.expires_at
-      : new Date(Date.UTC(2999, 0, 1)).toISOString();
-
-    const { data: ent, error: entErr } = await admin
-      .from("entitlements")
-      .upsert({ user_id: user.id, premium_until }, { onConflict: "user_id" })
-      .select("premium_until")
-      .single();
-    if (entErr) return json({ error: entErr.message }, { status: 500, headers: corsHeaders });
-
+    await recomputeEntitlementForUser(admin, user.id);
+    const { data: ent } = await admin.from("entitlements").select("premium_until").eq("user_id", user.id).maybeSingle();
     return json({ ok: true, entitlement: ent, purchase: upserted }, { headers: corsHeaders });
   } catch (e) {
     if (e instanceof Response) return withCors(e);
