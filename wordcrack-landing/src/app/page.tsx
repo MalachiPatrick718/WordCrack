@@ -36,18 +36,18 @@ export default function HomePage() {
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-xs font-semibold text-white/80">
                 <span className="inline-block h-2 w-2 rounded-full bg-sky" />
-                Hourly 5‑letter cipher puzzle
+                Hourly 5‑letter scramble puzzle
               </div>
 
               <h1 className="mt-5 text-4xl md:text-5xl font-black tracking-tight">
-                Crack the cipher.
+                Unscramble the word.
                 <br />
                 Beat the clock.
               </h1>
 
               <p className="mt-4 text-white/75 text-lg leading-relaxed">
-                WordCrack is a fast, logic‑driven word game. Everyone gets the same puzzle for the current hour—solve
-                quicker to climb the leaderboard.
+                WordCrack is a fast, logic‑driven word game with two modes: a classic Cipher puzzle and a Scramble puzzle.
+                Everyone gets the same puzzles for the current hour—solve quicker to climb the leaderboard. No account required: use Guest Mode to let friends try it instantly.
               </p>
 
               <div id="download" className="mt-7 flex flex-col sm:flex-row gap-3">
@@ -66,12 +66,12 @@ export default function HomePage() {
                   <Image src={appIcon} alt="WordCrack" width={44} height={44} priority />
                   <div>
                     <div className="font-extrabold">WordCrack</div>
-                    <div className="text-xs text-white/60">Ciphered Word • 5 columns • penalties for hints</div>
+                    <div className="text-xs text-white/60">Scrambled word • 5 columns • penalties for hints</div>
                   </div>
                 </div>
 
                 <div className="mt-6 grid grid-cols-5 gap-3">
-                  {["C", "I", "P", "H", "R"].map((c) => (
+                  {["K", "R", "B", "C", "I"].map((c) => (
                     <div
                       key={c}
                       className="aspect-square rounded-2xl bg-gradient-to-b from-blue/35 to-sky/10 border border-border grid place-items-center text-3xl font-black"
@@ -82,7 +82,7 @@ export default function HomePage() {
                 </div>
 
                 <div className="mt-6 grid grid-cols-5 gap-3">
-                  {["▲", "A", "▼", "▲", "B"].map((t, i) => (
+                  {["▲", "R", "▼", "▲", "K"].map((t, i) => (
                     <div
                       key={i}
                       className="h-16 rounded-2xl border border-border bg-white/5 grid place-items-center font-extrabold text-white/90"
@@ -106,16 +106,32 @@ export default function HomePage() {
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             {[
               {
-                title: "Ciphered Word",
-                body: "You’re shown a ciphered 5‑letter word. One shift amount is used (some positions may be unshifted).",
+                title: "Scrambled Word",
+                body: "You’re shown the target word scrambled (same letters, different order). Rearrange it into the correct order.",
+              },
+              {
+                title: "Cipher Puzzle (classic)",
+                body: "Prefer the original WordCrack feel? Play Cipher mode, where letters are shifted and you crack the pattern under pressure.",
               },
               {
                 title: "5 Columns",
-                body: "Each column cycles through 5 letters (one is correct). Tap ▲/▼ to pick your guess.",
+                body: "Each column cycles through the same 5 letters from the target word (shuffled). Tap ▲/▼ to pick the letter for each position.",
               },
               {
                 title: "Ranked by speed",
                 body: "Score is final time (solve time + penalties). Hints help, but always cost time.",
+              },
+              {
+                title: "Hints (with penalties)",
+                body: "Check which positions are correct, reveal a position, or reveal the theme hint. Each hint adds a time penalty.",
+              },
+              {
+                title: "Guest Mode",
+                body: "Let friends play without signing up. Guest Mode is perfect for quick pass‑and‑play—upgrade later to keep your progress synced.",
+              },
+              {
+                title: "Practice to get faster",
+                body: "Practice puzzles help you build skill + speed (choose Cipher or Scramble). Practice never affects the leaderboard.",
               },
             ].map((x) => (
               <div key={x.title} className="rounded-3xl border border-border bg-card p-6">
@@ -127,7 +143,7 @@ export default function HomePage() {
         </section>
 
         <section className="mt-16 rounded-3xl border border-border bg-card p-8">
-          <div className="text-2xl font-black">Ready to crack the next puzzle?</div>
+          <div className="text-2xl font-black">Ready for the next puzzle?</div>
           <div className="mt-2 text-white/70">Download WordCrack and compete on the hourly leaderboard.</div>
           <div className="mt-6 flex flex-col sm:flex-row gap-3">
             <StoreButton kind="ios" href="#" />

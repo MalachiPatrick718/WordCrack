@@ -25,10 +25,17 @@ jobs:
         working-directory: WordCrack
         run: npm ci
 
-      - name: Replenish puzzle bank (+30)
+      - name: Replenish cipher daily bank (+30)
         working-directory: WordCrack
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: npm run puzzle-bank:replenish
+        run: node scripts/replenish-puzzle-bank.js --count 30 --kind daily --variant cipher
+
+      - name: Replenish scramble daily bank (+30)
+        working-directory: WordCrack
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/replenish-puzzle-bank.js --count 30 --kind daily --variant scramble
 

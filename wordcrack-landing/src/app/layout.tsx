@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "WordCrack — Crack the cipher. Beat the clock.",
+  title: "WordCrack — Unscramble the word. Beat the clock.",
   description:
-    "WordCrack is an hourly 5-letter cipher word puzzle. Everyone gets the same puzzle—race the clock and climb the leaderboards.",
+    "WordCrack is an hourly 5-letter word game with two modes: Cipher and Scramble. Everyone gets the same puzzles—race the clock and climb the leaderboards.",
   icons: [{ rel: "icon", url: "/logo.svg" }],
 };
 

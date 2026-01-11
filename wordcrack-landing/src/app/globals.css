@@ -9,12 +9,12 @@ html, body {
 body {
   color: white;
   background:
-    radial-gradient(1150px 700px at 16% 10%, rgba(255, 217, 61, 0.28), transparent 60%),
-    radial-gradient(980px 640px at 82% 16%, rgba(74, 144, 217, 0.34), transparent 56%),
-    radial-gradient(980px 760px at 55% 96%, rgba(255, 217, 61, 0.18), transparent 58%),
-    radial-gradient(1200px 900px at 40% 92%, rgba(45, 90, 138, 0.28), transparent 60%),
-    linear-gradient(135deg, rgba(255, 217, 61, 0.10), rgba(74, 144, 217, 0.12)),
-    #0B1220;
+    radial-gradient(1200px 760px at 18% 8%, rgba(255, 217, 61, 0.38), transparent 62%),
+    radial-gradient(1100px 720px at 82% 14%, rgba(74, 144, 217, 0.46), transparent 60%),
+    radial-gradient(1100px 860px at 50% 94%, rgba(116, 192, 252, 0.30), transparent 62%),
+    radial-gradient(1200px 900px at 40% 92%, rgba(45, 90, 138, 0.22), transparent 62%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.10), rgba(74, 144, 217, 0.10)),
+    #142338;
 }
 
 ::selection {

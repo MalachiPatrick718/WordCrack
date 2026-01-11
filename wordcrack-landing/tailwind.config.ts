@@ -15,11 +15,11 @@ export default {
         green: "#26DE81",
         red: "#FC5C65",
         // Brighter glass cards + borders
-        card: "rgba(255,255,255,0.10)",
-        border: "rgba(255,255,255,0.16)",
+        card: "rgba(255,255,255,0.16)",
+        border: "rgba(255,255,255,0.22)",
       },
       boxShadow: {
-        glow: "0 0 52px rgba(74,144,217,0.34)",
+        glow: "0 0 64px rgba(74,144,217,0.30)",
       },
     },
   },
