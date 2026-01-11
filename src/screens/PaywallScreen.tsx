@@ -24,13 +24,13 @@ export function PaywallScreen({ navigation }: Props) {
   const monthlyPrice = monthly?.localizedPrice ?? "Monthly";
 
   const savePct = useMemo(() => {
-    const a = Number(annual?.price);
-    const m = Number(monthly?.price);
+    const a = Number(annual?.priceNumber);
+    const m = Number(monthly?.priceNumber);
     if (!Number.isFinite(a) || !Number.isFinite(m) || a <= 0 || m <= 0) return null;
     const yearlyAtMonthly = m * 12;
     const pct = Math.round(((yearlyAtMonthly - a) / yearlyAtMonthly) * 100);
     return pct > 0 && pct < 95 ? pct : null;
-  }, [annual?.price, monthly?.price]);
+  }, [annual?.priceNumber, monthly?.priceNumber]);
 
   const ctaProduct = selected === "annual" ? PRODUCTS.premium_annual : PRODUCTS.premium_monthly;
   const ctaLabel = selected === "annual" ? "Start WordCrack Premium Annual" : "Start WordCrack Premium Monthly";

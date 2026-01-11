@@ -12,13 +12,18 @@ function getPuzzleSlot(now = new Date()): number {
 Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
-  if (req.method !== "GET") return json({ error: "Method not allowed" }, { status: 405, headers: corsHeaders });
+  if (req.method !== "GET" && req.method !== "POST") return json({ error: "Method not allowed" }, { status: 405, headers: corsHeaders });
 
   try {
     const user = await requireUser(req);
     const url = new URL(req.url);
+    const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
     const date = url.searchParams.get("date") ?? getUtcDateString();
     const slotParam = url.searchParams.get("slot") ?? url.searchParams.get("hour");
+    const variant = String((body as any)?.variant ?? url.searchParams.get("variant") ?? "scramble").toLowerCase();
+    if (variant !== "cipher" && variant !== "scramble") {
+      return json({ error: "Invalid variant (expected cipher|scramble)" }, { status: 400, headers: corsHeaders });
+    }
     const slot = slotParam == null ? getPuzzleSlot() : Number(slotParam);
     if (!Number.isFinite(slot) || slot < 0 || slot > 23) {
       return json({ error: "Invalid slot (expected 0-23)" }, { status: 400, headers: corsHeaders });
@@ -29,9 +34,11 @@ Deno.serve(async (req) => {
 
     const { data: puzzle, error: puzzleErr } = await admin
       .from("puzzles")
-      .select("id,puzzle_date,puzzle_hour")
+      .select("id,puzzle_date,puzzle_hour,variant,kind")
       .eq("puzzle_date", date)
       .eq("puzzle_hour", slot)
+      .eq("kind", "daily")
+      .eq("variant", variant)
       .maybeSingle();
     if (puzzleErr) return json({ error: puzzleErr.message }, { status: 500, headers: corsHeaders });
     if (!puzzle) return json({ error: "Puzzle not found" }, { status: 404, headers: corsHeaders });
@@ -62,12 +69,12 @@ Deno.serve(async (req) => {
 
     const { data: profiles, error: profilesErr } = await admin
       .from("profiles_public")
-      .select("user_id,username,avatar_url")
+      .select("user_id,username,avatar_url,location")
       .in("user_id", ids);
     if (profilesErr) return json({ error: profilesErr.message }, { status: 500, headers: corsHeaders });
 
-    const profileById = new Map<string, { username: string; avatar_url: string | null }>();
-    for (const p of profiles ?? []) profileById.set(p.user_id, { username: p.username, avatar_url: p.avatar_url });
+    const profileById = new Map<string, { username: string; avatar_url: string | null; location: string | null }>();
+    for (const p of profiles ?? []) profileById.set(p.user_id, { username: p.username, avatar_url: p.avatar_url, location: (p as any).location ?? null });
 
     const { data: ents } = await admin.from("entitlements").select("user_id,premium_until").in("user_id", ids);
     const entById = new Map<string, string | null>();
@@ -83,6 +90,7 @@ Deno.serve(async (req) => {
           user_id: a.user_id,
           username: pr?.username ?? "player",
           avatar_url: pr?.avatar_url ?? null,
+          location: pr?.location ?? null,
           is_premium,
           final_time_ms: a.final_time_ms,
           penalty_ms: a.penalty_ms,
@@ -93,7 +101,7 @@ Deno.serve(async (req) => {
       .sort((x, y) => (x.final_time_ms ?? 0) - (y.final_time_ms ?? 0))
       .slice(0, limit);
 
-    return json({ date, slot, entries }, { headers: corsHeaders });
+    return json({ date, slot, variant, entries }, { headers: corsHeaders });
   } catch (e) {
     if (e instanceof Response) return withCors(e);
     const msg = e instanceof Error ? e.message : "Unknown error";

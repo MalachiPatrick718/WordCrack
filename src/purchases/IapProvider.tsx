@@ -11,7 +11,15 @@ type IapState = {
   loading: boolean;
   premiumTestEnabled: boolean;
   setPremiumTestEnabled: (enabled: boolean) => Promise<void>;
-  products: Partial<Record<ProductId, { productId: ProductId; title?: string; description?: string; localizedPrice?: string; price?: string | number }>>;
+  products: Partial<Record<ProductId, {
+    productId: ProductId;
+    title?: string;
+    description?: string;
+    localizedPrice?: string;
+    price?: string | number;
+    priceNumber?: number | null;
+    currency?: string | null;
+  }>>;
   restore: () => Promise<void>;
   buy: (productId: ProductId) => Promise<void>;
 };
@@ -33,6 +41,34 @@ async function refreshEntitlement(): Promise<{ premiumUntil: string | null }> {
 function isPremium(premiumUntil: string | null): boolean {
   if (!premiumUntil) return false;
   return new Date(premiumUntil).getTime() > Date.now();
+}
+
+function parsePriceNumber(input: unknown): number | null {
+  if (typeof input === "number" && Number.isFinite(input)) return input;
+  if (typeof input !== "string") return null;
+  // Accept common formats like "2.99", "$2.99", "US$2.99", "2,99"
+  const cleaned = input.replace(/[^0-9.,]/g, "").trim();
+  if (!cleaned) return null;
+  // Prefer dot-decimal; fall back to comma-decimal.
+  const dot = cleaned.includes(".") ? Number.parseFloat(cleaned.replace(/,/g, "")) : Number.parseFloat(cleaned.replace(",", "."));
+  return Number.isFinite(dot) ? dot : null;
+}
+
+function extractNumericPrice(p: any): number | null {
+  // Android (v5+): pricing phases
+  try {
+    const offer = p?.subscriptionOfferDetails?.[0];
+    const phase = offer?.pricingPhases?.pricingPhaseList?.[0];
+    const micros = phase?.priceAmountMicros ?? p?.priceAmountMicros;
+    if (micros != null) {
+      const n = Number(micros) / 1_000_000;
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+  } catch {
+    // ignore
+  }
+  // iOS / fallback
+  return parsePriceNumber(p?.price);
 }
 
 export function IapProvider(props: { children: React.ReactNode }) {
@@ -64,6 +100,8 @@ export function IapProvider(props: { children: React.ReactNode }) {
             description: p.description,
             localizedPrice: p.localizedPrice ?? p.localizedPriceAndroid ?? p.price,
             price: p.price,
+            priceNumber: extractNumericPrice(p),
+            currency: p.currency ?? p.currencyCodeAndroid ?? null,
           };
         }
         if (mounted) setProducts(map);

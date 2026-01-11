@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { handleCors, corsHeaders } from "../_shared/cors.ts";
 import { supabaseAdmin, getEnv } from "../_shared/supabase.ts";
 import { assertUpperAlpha, getUtcDateString, json } from "../_shared/utils.ts";
-import { generatePuzzleFromTarget } from "../_shared/puzzlegen.ts";
+import { generateCipherPuzzleFromTarget, generateScramblePuzzleFromTarget } from "../_shared/puzzlegen.ts";
 
 function getPuzzleSlot(now = new Date()): number {
   return now.getUTCHours();
@@ -33,18 +33,22 @@ Deno.serve(async (req) => {
     const target_word = String(body?.target_word ?? "");
     const theme_hint = body?.theme_hint != null ? String(body.theme_hint) : null;
     const overwrite = Boolean(body?.overwrite ?? false);
+    const variant = body?.variant === "cipher" || body?.variant === "scramble" ? body.variant : "scramble";
 
     if (!Number.isFinite(puzzle_hour) || puzzle_hour < 0 || puzzle_hour > 23) {
       return json({ error: "Invalid puzzle_hour (expected 0-23)" }, { status: 400, headers: corsHeaders });
     }
     assertUpperAlpha(target_word, 5);
 
-    const gen = generatePuzzleFromTarget({
-      target_word,
-      unshifted_count: body?.unshifted_count == null ? undefined : Number(body.unshifted_count),
-      shift_amount: body?.shift_amount == null ? undefined : Number(body.shift_amount),
-      direction: body?.direction === "left" || body?.direction === "right" ? body.direction : undefined,
-    });
+    const gen =
+      variant === "cipher"
+        ? generateCipherPuzzleFromTarget({
+            target_word,
+            unshifted_count: body?.unshifted_count == null ? undefined : Number(body.unshifted_count),
+            shift_amount: body?.shift_amount == null ? undefined : Number(body.shift_amount),
+            direction: body?.direction === "left" || body?.direction === "right" ? body.direction : undefined,
+          })
+        : generateScramblePuzzleFromTarget({ target_word });
     const cipher_word = gen.cipher_word;
     const letter_sets = gen.letter_sets;
 
@@ -57,13 +61,14 @@ Deno.serve(async (req) => {
       letter_sets,
       start_idxs: gen.start_idxs,
       theme_hint,
+      variant,
     };
 
     const q = overwrite
       ? admin.from("puzzles").upsert(payload, { onConflict: "puzzle_date,puzzle_hour" })
       : admin.from("puzzles").insert(payload);
 
-    const { data, error } = await q.select("id,puzzle_date,puzzle_hour,cipher_word,letter_sets,theme_hint").single();
+    const { data, error } = await q.select("id,puzzle_date,puzzle_hour,variant,cipher_word,letter_sets,theme_hint").single();
 
     if (error) {
       // Friendly status for common uniqueness violation when overwrite=false.

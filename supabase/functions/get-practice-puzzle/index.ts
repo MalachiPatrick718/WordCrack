@@ -5,7 +5,7 @@ import { supabaseAdmin } from "../_shared/supabase.ts";
 import { getUtcDateString, json } from "../_shared/utils.ts";
 import { withCors } from "../_shared/http.ts";
 import { assertUpperAlpha } from "../_shared/utils.ts";
-import { generatePuzzleFromTarget } from "../_shared/puzzlegen.ts";
+import { generateCipherPuzzleFromTarget, generateScramblePuzzleFromTarget } from "../_shared/puzzlegen.ts";
 
 function letterSetContains(set: unknown, letter: string): boolean {
   if (!Array.isArray(set)) return false;
@@ -31,10 +31,16 @@ function isValidCipherPuzzle(target: string, cipher: string, letter_sets: unknow
 Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
-  if (req.method !== "GET") return json({ error: "Method not allowed" }, { status: 405, headers: corsHeaders });
+  if (req.method !== "GET" && req.method !== "POST") return json({ error: "Method not allowed" }, { status: 405, headers: corsHeaders });
 
   try {
     const user = await requireUser(req);
+    const url = new URL(req.url);
+    const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
+    const variant = String((body as any)?.variant ?? url.searchParams.get("variant") ?? "scramble").toLowerCase();
+    if (variant !== "cipher" && variant !== "scramble") {
+      return json({ error: "Invalid variant (expected cipher|scramble)" }, { status: 400, headers: corsHeaders });
+    }
     const admin = supabaseAdmin();
     const today = getUtcDateString();
 
@@ -81,7 +87,7 @@ Deno.serve(async (req) => {
     assertUpperAlpha(target_word, 5);
 
     // Practice puzzles are generated on-demand with random cipher/decoys (same mechanics as daily).
-    const gen = generatePuzzleFromTarget({ target_word });
+    const gen = variant === "cipher" ? generateCipherPuzzleFromTarget({ target_word }) : generateScramblePuzzleFromTarget({ target_word });
     const puzzle_hour = new Date().getUTCHours(); // informational only; not used for uniqueness for practice
 
     const { data: inserted, error: insErr } = await admin
@@ -90,6 +96,7 @@ Deno.serve(async (req) => {
         puzzle_date: today,
         puzzle_hour,
         kind: "practice",
+        variant,
         bank_id,
         target_word,
         cipher_word: gen.cipher_word,
@@ -97,12 +104,12 @@ Deno.serve(async (req) => {
         start_idxs: gen.start_idxs,
         theme_hint,
       })
-      .select("id,puzzle_date,puzzle_hour,cipher_word,letter_sets,start_idxs,theme_hint")
+      .select("id,puzzle_date,puzzle_hour,kind,variant,cipher_word,letter_sets,start_idxs,theme_hint")
       .single();
 
     if (insErr) return json({ error: insErr.message }, { status: 500, headers: corsHeaders });
 
-    return json({ puzzle: inserted }, { headers: corsHeaders });
+    return json({ puzzle: inserted, variant }, { headers: corsHeaders });
   } catch (e) {
     if (e instanceof Response) return withCors(e);
     const msg = e instanceof Error ? e.message : "Unknown error";

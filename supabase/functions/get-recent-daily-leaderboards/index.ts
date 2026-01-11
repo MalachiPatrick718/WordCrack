@@ -11,6 +11,7 @@ type Entry = {
   user_id: string;
   username: string;
   avatar_url: string | null;
+  location?: string | null;
   final_time_ms: number;
   penalty_ms: number;
   hints_used_count: number;
@@ -61,7 +62,7 @@ Deno.serve(async (req) => {
 
     const { data: lbRows, error: lbErr } = await admin
       .from("daily_leaderboard")
-      .select("puzzle_id,user_id,username,avatar_url,final_time_ms,penalty_ms,hints_used_count")
+      .select("puzzle_id,user_id,username,avatar_url,location,final_time_ms,penalty_ms,hints_used_count")
       .in("puzzle_id", puzzleIds)
       .order("final_time_ms", { ascending: true })
       .limit(limitEntries * puzzleIds.length);

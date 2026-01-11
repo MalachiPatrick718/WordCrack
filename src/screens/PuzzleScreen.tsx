@@ -2,13 +2,15 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, Text, View, StyleSheet } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../AppRoot";
-import { getPracticePuzzle, getTodayPuzzle, giveUpAttempt, startAttempt, submitAttempt, useHint, type HintType } from "../lib/api";
+import { getPracticePuzzleByVariant, getTodayPuzzleByVariant, giveUpAttempt, startAttempt, submitAttempt, useHint, type HintType } from "../lib/api";
 import { setJson } from "../lib/storage";
 import { useTheme } from "../theme/theme";
 import { IncorrectModal } from "../components/IncorrectModal";
 import { SuccessModal } from "../components/SuccessModal";
 import { HintModal } from "../components/HintModal";
 import { HintPickerModal } from "../components/HintPickerModal";
+import { GiveUpModal } from "../components/GiveUpModal";
+import { PuzzleIntroModal } from "../components/PuzzleIntroModal";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Puzzle">;
 
@@ -25,7 +27,8 @@ function formatMs(ms: number): string {
 }
 
 export function PuzzleScreen({ navigation, route }: Props) {
-  const mode = route.params.mode;
+  const puzzleMode = route.params.mode;
+  const variant = route.params.variant;
   const { colors, shadows, borderRadius } = useTheme();
   const styles = useMemo(() => makeStyles(colors, shadows, borderRadius), [colors, shadows, borderRadius]);
 
@@ -44,6 +47,9 @@ export function PuzzleScreen({ navigation, route }: Props) {
   const [showSuccess, setShowSuccess] = useState(false);
   const [showHint, setShowHint] = useState(false);
   const [showHintPicker, setShowHintPicker] = useState(false);
+  const [showGiveUp, setShowGiveUp] = useState(false);
+  const [showIntro, setShowIntro] = useState(true);
+  const [giveUpWord, setGiveUpWord] = useState("");
   const [hintMessage, setHintMessage] = useState("");
   const [successData, setSuccessData] = useState<{
     finalTime: string;
@@ -87,16 +93,27 @@ export function PuzzleScreen({ navigation, route }: Props) {
         setAttemptId(null);
         setPenaltyMs(0);
         setHintsUsedCount(0);
+        setIdxs(Array.from({ length: WORD_LEN }, () => null));
 
-        const puzzle = mode === "practice" ? await getPracticePuzzle() : await getTodayPuzzle();
+        const puzzle =
+          puzzleMode === "practice" ? await getPracticePuzzleByVariant(variant) : await getTodayPuzzleByVariant(variant);
 
         if (!mounted) return;
         setPuzzleId(puzzle.id);
         setCipherWord(puzzle.cipher_word);
         setLetterSets(puzzle.letter_sets);
-        setStartIdxs(Array.isArray((puzzle as any).start_idxs) ? ((puzzle as any).start_idxs as number[]) : null);
+        const si =
+          Array.isArray((puzzle as any).start_idxs) && ((puzzle as any).start_idxs as unknown[]).length === WORD_LEN
+            ? (((puzzle as any).start_idxs as unknown[]) as number[]).map((n) => (Number.isFinite(n) ? Math.max(0, Math.min(4, Number(n))) : 0))
+            : null;
+        setStartIdxs(si);
+        // Prefill letter boxes on load (colored, not blank), but still keep interaction locked until Start.
+        setIdxs(si ?? Array.from({ length: WORD_LEN }, () => 0));
         setThemeHint(puzzle.theme_hint ?? null);
-        await setJson(mode === "practice" ? "wordcrack:practicePuzzleCache" : "wordcrack:todayPuzzleCache", puzzle);
+        await setJson(
+          puzzleMode === "practice" ? `wordcrack:practicePuzzleCache:${variant}` : `wordcrack:todayPuzzleCache:${variant}`,
+          puzzle,
+        );
       } catch (e: any) {
         Alert.alert("Can't start puzzle", e?.message ?? "Unknown error", [{ text: "OK", onPress: () => navigation.goBack() }]);
       } finally {
@@ -108,7 +125,7 @@ export function PuzzleScreen({ navigation, route }: Props) {
     };
     // Intentionally not depending on `navigation`: the navigation object identity can change and
     // we never want that to trigger a puzzle reload mid-attempt.
-  }, [mode]);
+  }, [puzzleMode, variant]);
 
   const elapsedMs = useMemo(() => {
     if (!started || !startedAtLocalRef.current) return 0;
@@ -116,11 +133,8 @@ export function PuzzleScreen({ navigation, route }: Props) {
     return Math.max(0, baseNow - startedAtLocalRef.current - pausedTotalRef.current);
   }, [now, started, paused]);
 
-  // Start blank (no pre-selected letters)
+  // Prefilled on puzzle load via `start_idxs` (no "already solved-looking" start state).
   const [idxs, setIdxs] = useState<(number | null)[]>(Array.from({ length: WORD_LEN }, () => null));
-  useEffect(() => {
-    setIdxs(Array.from({ length: WORD_LEN }, () => null));
-  }, [cipherWord]);
 
   const getSelectedLetter = (col: number): string | null => {
     const set = letterSets[col];
@@ -162,21 +176,18 @@ export function PuzzleScreen({ navigation, route }: Props) {
     try {
       setLoading(true);
 
-      const attempt = await startAttempt(puzzleId, mode);
+      const attempt = await startAttempt(puzzleId, puzzleMode);
       setAttemptId(attempt.id);
       setPenaltyMs(attempt.penalty_ms);
       setHintsUsedCount(Array.isArray(attempt.hints_used) ? attempt.hints_used.length : 0);
 
-      // Populate boxes with a random starting letter (not blank)
-      if (Array.isArray(startIdxs) && startIdxs.length === WORD_LEN) {
-        setIdxs(startIdxs.map((n) => (Number.isFinite(n) ? Math.max(0, Math.min(4, n)) : 0)));
-      } else {
-        const nextIdxs = letterSets.map((set) => {
-          const len = set?.length ?? 0;
-          if (len <= 0) return 0;
-          return Math.floor(Math.random() * len);
-        });
-        setIdxs(nextIdxs.map((n) => (Number.isFinite(n) ? n : 0)));
+      // If we somehow still have blank boxes, populate them at Start.
+      if (idxs.some((v) => v == null)) {
+        if (Array.isArray(startIdxs) && startIdxs.length === WORD_LEN) {
+          setIdxs(startIdxs.map((n) => (Number.isFinite(n) ? Math.max(0, Math.min(4, n)) : 0)));
+        } else {
+          setIdxs(Array.from({ length: WORD_LEN }, () => 0));
+        }
       }
 
       pausedTotalRef.current = 0;
@@ -215,7 +226,11 @@ export function PuzzleScreen({ navigation, route }: Props) {
     if (!attemptId) return;
     if (usedHintTypesLocal.has(type)) return;
     try {
-      const res = await useHint(attemptId, type);
+      if (type === "check_positions" && !allSelected) {
+        Alert.alert("Select all letters first", "This hint checks which of your currently selected letters are in the correct position.");
+        return;
+      }
+      const res = await useHint(attemptId, type, type === "check_positions" ? { guess_word: guessWord } : undefined);
       setPenaltyMs(res.attempt.penalty_ms);
       setHintsUsedCount(Array.isArray(res.attempt.hints_used) ? res.attempt.hints_used.length : 0);
       setUsedHintTypesLocal((prev) => new Set(prev).add(type));
@@ -261,7 +276,7 @@ export function PuzzleScreen({ navigation, route }: Props) {
     Alert.alert(
       "Give up?",
       hasActive
-        ? "This will reveal the word. You won’t be added to the leaderboard. Are you sure?"
+        ? "This will reveal the word. You won't be added to the leaderboard. Are you sure?"
         : "Are you sure you want to leave this puzzle?",
       [
         { text: "Cancel", style: "cancel" },
@@ -272,15 +287,8 @@ export function PuzzleScreen({ navigation, route }: Props) {
             try {
               if (attemptId) {
                 const res = await giveUpAttempt(attemptId);
-                Alert.alert("Word revealed", `The word was ${res.target_word}.`, [
-                  {
-                    text: "OK",
-                    onPress: async () => {
-                      attemptLockedRef.current = false;
-                      navigation.reset({ index: 0, routes: [{ name: "Home" }] });
-                    },
-                  },
-                ]);
+                setGiveUpWord(res.target_word);
+                setShowGiveUp(true);
                 return;
               }
             } catch (e: any) {
@@ -296,13 +304,20 @@ export function PuzzleScreen({ navigation, route }: Props) {
     );
   };
 
+  const handleGiveUpClose = () => {
+    setShowGiveUp(false);
+    attemptLockedRef.current = false;
+    navigation.reset({ index: 0, routes: [{ name: "Home" }] });
+  };
+
   const handleSuccessContinue = () => {
     if (!successData) return;
     setShowSuccess(false);
     attemptLockedRef.current = false;
     navigation.replace("Results", {
       attemptId: successData.attemptId,
-      mode,
+      mode: puzzleMode,
+      variant,
       solve_time_ms: successData.solve_time_ms,
       penalty_ms: successData.penalty_ms,
       final_time_ms: successData.final_time_ms,
@@ -315,18 +330,23 @@ export function PuzzleScreen({ navigation, route }: Props) {
     <View style={styles.container}>
       {/* Ciphered Word Display */}
       <View style={styles.cipherContainer}>
-        <Text style={styles.cipherLabel}>Ciphered Word</Text>
-        {themeHint ? (
+        <Text style={styles.cipherLabel}>{variant === "cipher" ? "Ciphered Word" : "Scrambled Word"}</Text>
+        {variant === "cipher" && themeHint && (
           <View style={styles.themePill}>
             <Text style={styles.themePillText}>Theme: {themeHint}</Text>
           </View>
-        ) : null}
+        )}
         <View style={styles.cipherTiles}>
-          {(cipherWord || PLACEHOLDER).split("").slice(0, WORD_LEN).map((letter, i) => (
-            <View key={i} style={[styles.cipherTile, { backgroundColor: colors.tiles[i % colors.tiles.length] }]}>
-              <Text style={styles.cipherLetter}>{letter}</Text>
-            </View>
-          ))}
+          {(() => {
+            // Cipher: always visible. Scramble: hidden until started, and hidden when paused.
+            const showWord = variant === "cipher" ? true : (started && !paused);
+            const displayWord = showWord ? cipherWord : "";
+            return (displayWord || PLACEHOLDER).split("").slice(0, WORD_LEN).map((letter, i) => (
+              <View key={i} style={[styles.cipherTile, { backgroundColor: colors.tiles[i % colors.tiles.length] }]}>
+                <Text style={styles.cipherLetter}>{letter}</Text>
+              </View>
+            ));
+          })()}
         </View>
       </View>
 
@@ -388,7 +408,7 @@ export function PuzzleScreen({ navigation, route }: Props) {
       <View style={styles.columnsContainer}>
         {Array.from({ length: WORD_LEN }, (_, col) => {
           const sel = getSelectedLetter(col);
-          const cur = started ? (sel ?? "?") : "—";
+          const cur = started ? (sel ?? "—") : "—";
           const hasSelection = sel !== null;
           const tileColor = colors.tiles[col % colors.tiles.length];
 
@@ -416,7 +436,7 @@ export function PuzzleScreen({ navigation, route }: Props) {
               ]}>
                 <Text style={[
                   styles.letterText,
-                  !hasSelection && { color: colors.text.muted }
+                  (!hasSelection || !started) && { color: colors.text.muted }
                 ]}>{cur}</Text>
               </View>
 
@@ -472,6 +492,7 @@ export function PuzzleScreen({ navigation, route }: Props) {
       <HintPickerModal
         visible={showHintPicker}
         remainingHints={remainingHints}
+        variant={variant}
         usedTypes={usedHintTypesLocal}
         onPick={pickHint}
         onClose={() => setShowHintPicker(false)}
@@ -495,6 +516,20 @@ export function PuzzleScreen({ navigation, route }: Props) {
         finalTime={successData?.finalTime ?? "00:00.00"}
         rank={successData?.rank ?? null}
         onContinue={handleSuccessContinue}
+      />
+
+      {/* Give Up Modal */}
+      <GiveUpModal
+        visible={showGiveUp}
+        targetWord={giveUpWord}
+        onClose={handleGiveUpClose}
+      />
+
+      {/* Puzzle Intro Modal */}
+      <PuzzleIntroModal
+        visible={showIntro && !loading}
+        variant={variant}
+        onStart={() => setShowIntro(false)}
       />
     </View>
   );

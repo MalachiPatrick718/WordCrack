@@ -1,11 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, Image, Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
-import { addFriendByInviteCode, getDailyLeaderboard, getFriendsLeaderboard, getGlobalRankings, type GlobalRankingEntry, type LeaderboardEntry } from "../lib/api";
+import { Alert, Image, Modal, Pressable, ScrollView, Text, TextInput, View, StyleSheet } from "react-native";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { addFriendByInviteCode, getDailyLeaderboardByVariant, getFriendsLeaderboardByVariant, getGlobalRankings, type GlobalRankingEntry, type LeaderboardEntry } from "../lib/api";
 import { useAuth } from "../state/AuthProvider";
 import { useIap } from "../purchases/IapProvider";
 import { useTheme } from "../theme/theme";
+import { RootStackParamList } from "../AppRoot";
 
-type Tab = "daily" | "friends";
+type Tab = "global" | "cipher" | "scramble" | "friends";
+type Props = NativeStackScreenProps<RootStackParamList, "Leaderboards">;
 
 function fmtMs(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -22,17 +25,27 @@ function getRankColor(rank: number, colors: any): string {
   return colors.background.card;
 }
 
-export function LeaderboardsScreen() {
+const TAB_LABELS: Record<Tab, { emoji: string; label: string }> = {
+  global: { emoji: "🌍", label: "Global Rankings" },
+  cipher: { emoji: "🔐", label: "This Hour's Cipher Rankings" },
+  scramble: { emoji: "🔀", label: "This Hour's Scramble Rankings" },
+  friends: { emoji: "👥", label: "Friends" },
+};
+
+export function LeaderboardsScreen({ route }: Props) {
   const { user } = useAuth();
   const iap = useIap();
   const { colors, shadows, borderRadius } = useTheme();
   const styles = useMemo(() => makeStyles(colors, shadows, borderRadius), [colors, shadows, borderRadius]);
-  const [tab, setTab] = useState<Tab>("daily");
+  const initialTab = route.params?.initialTab ?? "global";
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [dailyEntries, setDailyEntries] = useState<LeaderboardEntry[] | null>(null);
   const [globalRankings, setGlobalRankings] = useState<GlobalRankingEntry[] | null>(null);
   const [friendsEntries, setFriendsEntries] = useState<LeaderboardEntry[] | null>(null);
   const [loading, setLoading] = useState<null | Tab>(null);
   const [inviteCode, setInviteCode] = useState("");
+  const [friendsVariant, setFriendsVariant] = useState<"cipher" | "scramble">("scramble");
+  const [showPicker, setShowPicker] = useState(false);
 
   const isAnonymous = Boolean((user as any)?.is_anonymous) || (user as any)?.app_metadata?.provider === "anonymous";
   const canUseFriends = !isAnonymous && iap.premium;
@@ -41,11 +54,11 @@ export function LeaderboardsScreen() {
     try {
       setLoading(t);
       // Prevent the "global list flashes in friends tab" effect.
-      if (t === "daily") setDailyEntries(null);
-      if (t === "daily") setGlobalRankings(null);
+      if (t === "cipher" || t === "scramble") setDailyEntries(null);
+      if (t === "global") setGlobalRankings(null);
       if (t === "friends") setFriendsEntries(null);
-      if (t === "daily") {
-        const entries = await getDailyLeaderboard();
+      if (t === "cipher" || t === "scramble") {
+        const entries = await getDailyLeaderboardByVariant(t === "cipher" ? "cipher" : "scramble");
         // Non-premium: show top 3, but always show "Me" if present.
         if (iap.premium) {
           setDailyEntries(entries);
@@ -55,12 +68,13 @@ export function LeaderboardsScreen() {
           const merged = me && !top3.some((e) => e.user_id === me.user_id) ? [...top3, me] : top3;
           setDailyEntries(merged);
         }
-
+      }
+      if (t === "global") {
         const ranks = await getGlobalRankings({ limit: iap.premium ? 100 : 25, min_solved: 5 });
         setGlobalRankings(ranks);
       }
       if (t === "friends") {
-        const data = await getFriendsLeaderboard();
+        const data = await getFriendsLeaderboardByVariant(friendsVariant);
         setFriendsEntries(data);
       }
     } catch (e: any) {
@@ -73,55 +87,80 @@ export function LeaderboardsScreen() {
   useEffect(() => {
     // Friends requires Premium.
     if (tab === "friends" && !canUseFriends) {
-      setTab("daily");
+      setTab("global");
       return;
     }
     void load(tab);
-  }, [tab]);
+  }, [tab, friendsVariant]);
+
+  const selectTab = (t: Tab) => {
+    if (t === "friends" && !canUseFriends) {
+      Alert.alert("WordCrack Premium", "Upgrade to unlock friends leaderboards.", [
+        { text: "Not now", style: "cancel" },
+      ]);
+      return;
+    }
+    setTab(t);
+    setShowPicker(false);
+  };
 
   return (
     <View style={styles.container}>
-      {/* Tab Switcher */}
-      <View style={styles.tabContainer}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => setTab("daily")}
-          style={[
-            styles.tab,
-            tab === "daily" ? styles.tabActive : styles.tabInactive,
-          ]}
-        >
-          <Text style={[styles.tabText, tab === "daily" && styles.tabTextActive]}>
-            🌍 Global
-          </Text>
+      {/* Dropdown Selector */}
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => setShowPicker(true)}
+        style={({ pressed }) => [
+          styles.dropdownButton,
+          pressed && { opacity: 0.9 },
+        ]}
+      >
+        <Text style={styles.dropdownButtonText}>
+          {TAB_LABELS[tab].emoji} {TAB_LABELS[tab].label}
+        </Text>
+        <Text style={styles.dropdownArrow}>▼</Text>
+      </Pressable>
+
+      {/* Picker Modal */}
+      <Modal
+        visible={showPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPicker(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setShowPicker(false)}>
+          <View style={styles.pickerContainer}>
+            <Text style={styles.pickerTitle}>Select Leaderboard</Text>
+            {(["global", "cipher", "scramble", "friends"] as Tab[]).map((t) => {
+              const isDisabled = t === "friends" && !canUseFriends;
+              const isSelected = t === tab;
+              return (
+                <Pressable
+                  key={t}
+                  accessibilityRole="button"
+                  onPress={() => selectTab(t)}
+                  style={({ pressed }) => [
+                    styles.pickerOption,
+                    isSelected && styles.pickerOptionSelected,
+                    isDisabled && styles.pickerOptionDisabled,
+                    pressed && !isDisabled && { opacity: 0.8 },
+                  ]}
+                >
+                  <Text style={[
+                    styles.pickerOptionText,
+                    isSelected && styles.pickerOptionTextSelected,
+                    isDisabled && styles.pickerOptionTextDisabled,
+                  ]}>
+                    {TAB_LABELS[t].emoji} {TAB_LABELS[t].label}
+                    {isDisabled ? " (Premium)" : ""}
+                  </Text>
+                  {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                </Pressable>
+              );
+            })}
+          </View>
         </Pressable>
-        {canUseFriends ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setTab("friends")}
-            style={[
-              styles.tab,
-              tab === "friends" ? styles.tabActive : styles.tabInactive,
-            ]}
-          >
-            <Text style={[styles.tabText, tab === "friends" && styles.tabTextActive]}>
-              👥 Friends
-            </Text>
-          </Pressable>
-        ) : (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => {
-              Alert.alert("WordCrack Premium", "Upgrade to unlock friends leaderboards.", [
-                { text: "Not now", style: "cancel" },
-              ]);
-            }}
-            style={[styles.tab, styles.tabInactive, { opacity: 0.5 }]}
-          >
-            <Text style={styles.tabText}>👥 Friends</Text>
-          </Pressable>
-        )}
-      </View>
+      </Modal>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Add Friend Section */}
@@ -160,6 +199,26 @@ export function LeaderboardsScreen() {
           </View>
         )}
 
+        {/* Friends variant switch */}
+        {tab === "friends" && canUseFriends && (
+          <View style={styles.friendVariantRow}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setFriendsVariant("cipher")}
+              style={[styles.friendVariantPill, friendsVariant === "cipher" ? styles.friendVariantPillActive : styles.friendVariantPillInactive]}
+            >
+              <Text style={[styles.friendVariantText, friendsVariant === "cipher" && styles.friendVariantTextActive]}>Cipher</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setFriendsVariant("scramble")}
+              style={[styles.friendVariantPill, friendsVariant === "scramble" ? styles.friendVariantPillActive : styles.friendVariantPillInactive]}
+            >
+              <Text style={[styles.friendVariantText, friendsVariant === "scramble" && styles.friendVariantTextActive]}>Scramble</Text>
+            </Pressable>
+          </View>
+        )}
+
         {/* Loading State */}
         {loading === tab && (
           <View style={styles.emptyState}>
@@ -168,7 +227,7 @@ export function LeaderboardsScreen() {
         )}
 
         {/* Empty State */}
-        {tab === "daily" && (dailyEntries?.length ?? 0) === 0 && loading !== tab && (
+        {(tab === "cipher" || tab === "scramble") && (dailyEntries?.length ?? 0) === 0 && loading !== tab && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyEmoji}>🏆</Text>
             <Text style={styles.emptyTitle}>No entries yet</Text>
@@ -185,8 +244,8 @@ export function LeaderboardsScreen() {
           </View>
         )}
 
-        {/* Daily entries (single list - current puzzle) */}
-        {tab === "daily" &&
+        {/* Current puzzle entries (Cipher / Scramble) */}
+        {(tab === "cipher" || tab === "scramble") &&
           (dailyEntries ?? []).map((e, i) => (
             <View
               key={`${e.user_id}:${i}`}
@@ -221,7 +280,7 @@ export function LeaderboardsScreen() {
                   </View>
                 </View>
                 <Text style={styles.entryDetails}>
-                  💡 {e.hints_used_count} hints • ⏱️ +{Math.floor(e.penalty_ms / 1000)}s
+                  💡 {e.hints_used_count} hints • ⏱️ +{Math.floor(e.penalty_ms / 1000)}s{e.location ? ` • 📍 ${e.location}` : ""}
                 </Text>
               </View>
               <Text style={styles.entryTime}>{fmtMs(e.final_time_ms)}</Text>
@@ -229,7 +288,7 @@ export function LeaderboardsScreen() {
           ))}
 
         {/* Global Rankings (average across daily puzzles) */}
-        {tab === "daily" ? (
+        {tab === "global" ? (
           <View style={styles.globalRankingsSection}>
             <Text style={styles.globalRankingsTitle}>Global Rankings</Text>
             <Text style={styles.globalRankingsSub}>Average final time across daily puzzles (min 5 solves)</Text>
@@ -266,7 +325,7 @@ export function LeaderboardsScreen() {
                         </View>
                       ) : null}
                     </View>
-                    <Text style={styles.rankMeta}>🧩 {e.puzzles_solved} solves</Text>
+                    <Text style={styles.rankMeta}>🧩 {e.puzzles_solved} solves{e.location ? ` • 📍 ${e.location}` : ""}</Text>
                   </View>
                   <Text style={styles.rankTime}>{fmtMs(e.avg_final_time_ms)}</Text>
                 </View>
@@ -276,7 +335,7 @@ export function LeaderboardsScreen() {
         ) : null}
 
         {/* Upgrade CTA (daily) */}
-        {tab === "daily" && !iap.premium ? (
+        {tab === "global" && !iap.premium ? (
           <Pressable
             accessibilityRole="button"
             onPress={() => (isAnonymous ? Alert.alert("Create an account", "Create an account to upgrade to Premium.") : null)}
@@ -326,7 +385,7 @@ export function LeaderboardsScreen() {
                   </View>
                 </View>
                 <Text style={styles.entryDetails}>
-                  💡 {e.hints_used_count} hints • ⏱️ +{Math.floor(e.penalty_ms / 1000)}s
+                  💡 {e.hints_used_count} hints • ⏱️ +{Math.floor(e.penalty_ms / 1000)}s{e.location ? ` • 📍 ${e.location}` : ""}
                 </Text>
               </View>
               <Text style={styles.entryTime}>{fmtMs(e.final_time_ms)}</Text>
@@ -344,31 +403,79 @@ function makeStyles(colors: any, shadows: any, borderRadius: any) {
     backgroundColor: colors.background.main,
     padding: 16,
   },
-  tabContainer: {
+  dropdownButton: {
     flexDirection: "row",
-    gap: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primary.darkBlue,
+    borderRadius: borderRadius.large,
+    padding: 16,
+    marginBottom: 16,
+    ...shadows.small,
+  },
+  dropdownButtonText: {
+    fontWeight: "800",
+    fontSize: 17,
+    color: colors.text.light,
+    textAlign: "center",
+  },
+  dropdownArrow: {
+    fontSize: 14,
+    color: colors.text.light,
+    opacity: 0.8,
+    marginLeft: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  pickerContainer: {
+    backgroundColor: colors.background.card,
+    borderRadius: borderRadius.xl,
+    padding: 16,
+    width: "100%",
+    maxWidth: 340,
+    ...shadows.medium,
+  },
+  pickerTitle: {
+    fontWeight: "900",
+    fontSize: 18,
+    color: colors.text.primary,
+    textAlign: "center",
     marginBottom: 16,
   },
-  tab: {
-    flex: 1,
-    padding: 14,
-    borderRadius: borderRadius.large,
+  pickerOption: {
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    borderRadius: borderRadius.large,
+    marginBottom: 8,
+    backgroundColor: colors.background.main,
   },
-  tabActive: {
+  pickerOptionSelected: {
     backgroundColor: colors.primary.darkBlue,
-    ...shadows.small,
   },
-  tabInactive: {
-    backgroundColor: colors.background.card,
-    ...shadows.small,
+  pickerOptionDisabled: {
+    opacity: 0.5,
   },
-  tabText: {
+  pickerOptionText: {
     fontWeight: "700",
-    fontSize: 15,
+    fontSize: 16,
     color: colors.text.primary,
   },
-  tabTextActive: {
+  pickerOptionTextSelected: {
+    color: colors.text.light,
+  },
+  pickerOptionTextDisabled: {
+    color: colors.text.muted,
+  },
+  checkmark: {
+    fontSize: 18,
+    fontWeight: "800",
     color: colors.text.light,
   },
   scrollContent: {
@@ -445,6 +552,34 @@ function makeStyles(colors: any, shadows: any, borderRadius: any) {
     padding: 16,
     marginBottom: 16,
     ...shadows.small,
+  },
+  friendVariantRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 16,
+  },
+  friendVariantPill: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: borderRadius.large,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.ui.border,
+  },
+  friendVariantPillActive: {
+    backgroundColor: colors.primary.darkBlue,
+    ...shadows.small,
+  },
+  friendVariantPillInactive: {
+    backgroundColor: colors.background.card,
+    ...shadows.small,
+  },
+  friendVariantText: {
+    fontWeight: "800",
+    color: colors.text.primary,
+  },
+  friendVariantTextActive: {
+    color: colors.text.light,
   },
   cardTitle: {
     fontWeight: "800",

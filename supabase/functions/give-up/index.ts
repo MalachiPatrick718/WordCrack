@@ -11,9 +11,13 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, { status: 405, headers: corsHeaders });
 
   try {
+    console.log("give-up: starting");
     const user = await requireUser(req);
+    console.log("give-up: user authenticated", user.id);
+
     const body = await req.json().catch(() => ({}));
     const attempt_id = String(body?.attempt_id ?? "");
+    console.log("give-up: attempt_id", attempt_id);
     if (!attempt_id) return json({ error: "Missing attempt_id" }, { status: 400, headers: corsHeaders });
 
     const admin = supabaseAdmin();
@@ -23,6 +27,7 @@ Deno.serve(async (req) => {
       .select("id,user_id,puzzle_id,mode,is_completed,penalty_ms,gave_up")
       .eq("id", attempt_id)
       .maybeSingle();
+    console.log("give-up: attempt query result", { attempt, attemptErr });
     if (attemptErr) return json({ error: attemptErr.message }, { status: 500, headers: corsHeaders });
     if (!attempt) return json({ error: "Attempt not found" }, { status: 404, headers: corsHeaders });
     if (attempt.user_id !== user.id) return json({ error: "Forbidden" }, { status: 403, headers: corsHeaders });

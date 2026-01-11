@@ -3,6 +3,9 @@ import { supabase } from "./supabase";
 export type PuzzlePublic = {
   id: string;
   puzzle_date: string;
+  puzzle_hour?: number;
+  kind?: "daily" | "practice";
+  variant?: "cipher" | "scramble";
   cipher_word: string;
   letter_sets: string[][];
   start_idxs?: number[] | null;
@@ -25,22 +28,43 @@ export type Attempt = {
 };
 
 async function invoke<T>(name: string, opts: { method?: string; body?: unknown } = {}): Promise<T> {
+  console.log(`invoke: calling ${name}`, opts.body);
   const { data, error } = await supabase.functions.invoke(name, {
     method: (opts.method ?? "POST") as "POST" | "GET" | "PUT" | "PATCH" | "DELETE",
     body: opts.body as Record<string, any> | string | undefined,
   });
+  console.log(`invoke: ${name} response`, { data, error });
   if (error) {
+    // Log full error details for debugging
+    console.log(`invoke: ${name} FULL ERROR:`, JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+    console.log(`invoke: ${name} error.context:`, (error as any)?.context);
+
     // Supabase Functions errors often hide the server message behind a generic "non-2xx" text.
     // Try to surface the JSON error payload when present.
     const ctx = (error as any)?.context;
-    const body = ctx?.body;
     let msg = error.message ?? "Request failed";
+
+    // Try multiple ways to extract the actual error message
     try {
-      const parsed = typeof body === "string" ? JSON.parse(body) : body;
-      if (parsed?.error) msg = String(parsed.error);
-    } catch {
-      // ignore
+      // Try to read the response body if it's a Response object
+      if (ctx && typeof ctx.json === "function" && !ctx.bodyUsed) {
+        const body = await ctx.json();
+        console.log(`invoke: ${name} error body:`, body);
+        if (body?.error) msg = String(body.error);
+      }
+      // Check context.body
+      else if (ctx?.body) {
+        const parsed = typeof ctx.body === "string" ? JSON.parse(ctx.body) : ctx.body;
+        if (parsed?.error) msg = String(parsed.error);
+      }
+      // Check if data itself contains error (some versions return it differently)
+      if (data && typeof data === "object" && "error" in data) {
+        msg = String((data as any).error);
+      }
+    } catch (parseErr) {
+      console.log(`invoke: ${name} error parsing:`, parseErr);
     }
+
     const e = new Error(msg);
     (e as any).status = ctx?.status ?? ctx?.statusCode;
     throw e;
@@ -49,13 +73,21 @@ async function invoke<T>(name: string, opts: { method?: string; body?: unknown }
 }
 
 export async function getTodayPuzzle(): Promise<PuzzlePublic> {
-  const { data, error } = await supabase.functions.invoke("get-today-puzzle", { method: "GET" });
-  if (error) throw error;
-  return (data as { puzzle: PuzzlePublic }).puzzle;
+  return await getTodayPuzzleByVariant("scramble");
+}
+
+export async function getTodayPuzzleByVariant(variant: "cipher" | "scramble"): Promise<PuzzlePublic> {
+  const res = await invoke<{ puzzle: PuzzlePublic }>("get-today-puzzle", { body: { variant } });
+  return res.puzzle;
 }
 
 export async function getPracticePuzzle(): Promise<PuzzlePublic> {
-  const res = await invoke<{ puzzle: PuzzlePublic }>("get-practice-puzzle", { method: "GET" });
+  const res = await invoke<{ puzzle: PuzzlePublic }>("get-practice-puzzle", { body: { variant: "scramble" } });
+  return res.puzzle;
+}
+
+export async function getPracticePuzzleByVariant(variant: "cipher" | "scramble"): Promise<PuzzlePublic> {
+  const res = await invoke<{ puzzle: PuzzlePublic }>("get-practice-puzzle", { body: { variant } });
   return res.puzzle;
 }
 
@@ -64,11 +96,29 @@ export async function startAttempt(puzzle_id: string, mode: "daily" | "practice"
   return res.attempt;
 }
 
-export type HintType = "shift_count" | "shift_position" | "reveal_letter";
+export async function submitFeedback(args: {
+  message: string;
+  category?: string;
+  rating?: number;
+  context?: Record<string, unknown>;
+}): Promise<{ id: string; created_at: string }> {
+  const res = await invoke<{ ok: true; feedback: { id: string; created_at: string } }>("submit-feedback", {
+    body: {
+      message: args.message,
+      category: args.category,
+      rating: args.rating,
+      context: args.context,
+    },
+  });
+  return res.feedback;
+}
+
+export type HintType = "check_positions" | "reveal_position" | "reveal_theme" | "shift_amount" | "unshifted_positions";
 
 export async function useHint(
   attempt_id: string,
   hint_type: HintType,
+  opts?: { guess_word?: string },
 ): Promise<{
   message: string;
   penalty_ms: number;
@@ -76,7 +126,7 @@ export async function useHint(
   attempt: Pick<Attempt, "id" | "penalty_ms" | "hints_used">;
 }> {
   const res = await invoke<{ hint: { message: string; penalty_ms: number }; attempt: Pick<Attempt, "id" | "penalty_ms" | "hints_used"> }>("use-hint", {
-    body: { attempt_id, hint_type },
+    body: { attempt_id, hint_type, ...(opts?.guess_word ? { guess_word: opts.guess_word } : {}) },
   });
   return { message: res.hint.message, penalty_ms: res.hint.penalty_ms, meta: (res as any).hint?.meta, attempt: res.attempt };
 }
@@ -86,13 +136,17 @@ export async function submitAttempt(attempt_id: string, guess_word: string): Pro
 }
 
 export async function giveUpAttempt(attempt_id: string): Promise<{ gave_up: true; target_word: string }> {
-  return await invoke("give-up", { body: { attempt_id } });
+  console.log("giveUpAttempt called with:", attempt_id);
+  const result = await invoke<{ gave_up: true; target_word: string }>("give-up", { body: { attempt_id } });
+  console.log("giveUpAttempt result:", result);
+  return result;
 }
 
 export type LeaderboardEntry = {
   user_id: string;
   username: string;
   avatar_url: string | null;
+  location?: string | null;
   is_premium?: boolean;
   final_time_ms: number;
   penalty_ms: number;
@@ -103,15 +157,19 @@ export type GlobalRankingEntry = {
   user_id: string;
   username: string;
   avatar_url: string | null;
+  location?: string | null;
   puzzles_solved: number;
   avg_final_time_ms: number;
   is_premium?: boolean;
 };
 
 export async function getDailyLeaderboard(): Promise<LeaderboardEntry[]> {
-  const { data, error } = await supabase.functions.invoke("get-daily-leaderboard", { method: "GET" });
-  if (error) throw error;
-  return (data as { entries: LeaderboardEntry[] }).entries ?? [];
+  return await getDailyLeaderboardByVariant("scramble");
+}
+
+export async function getDailyLeaderboardByVariant(variant: "cipher" | "scramble"): Promise<LeaderboardEntry[]> {
+  const res = await invoke<{ entries: LeaderboardEntry[] }>("get-daily-leaderboard", { body: { variant } });
+  return res.entries ?? [];
 }
 
 export async function getGlobalRankings(opts?: { limit?: number; min_solved?: number }): Promise<GlobalRankingEntry[]> {
@@ -146,9 +204,12 @@ export async function getRecentDailyLeaderboards(opts?: { limit_puzzles?: number
 }
 
 export async function getFriendsLeaderboard(): Promise<LeaderboardEntry[]> {
-  const { data, error } = await supabase.functions.invoke("get-friends-leaderboard", { method: "GET" });
-  if (error) throw error;
-  return (data as { entries: LeaderboardEntry[] }).entries ?? [];
+  return await getFriendsLeaderboardByVariant("scramble");
+}
+
+export async function getFriendsLeaderboardByVariant(variant: "cipher" | "scramble"): Promise<LeaderboardEntry[]> {
+  const res = await invoke<{ entries: LeaderboardEntry[] }>("get-friends-leaderboard", { body: { variant } });
+  return res.entries ?? [];
 }
 
 export async function addFriendByInviteCode(invite_code: string): Promise<{ user_id: string; username: string; avatar_url: string | null }> {
@@ -164,10 +225,16 @@ export async function getMyStats(): Promise<{
   avg_7d_ms: number | null;
   avg_30d_ms: number | null;
   hint_usage_count: number;
+  cipher: { best_time_ms: number | null; avg_7d_ms: number | null; avg_30d_ms: number | null; hint_usage_count: number };
+  scramble: { best_time_ms: number | null; avg_7d_ms: number | null; avg_30d_ms: number | null; hint_usage_count: number };
 }> {
   const { data, error } = await supabase.functions.invoke("get-my-stats", { method: "GET" });
   if (error) throw error;
   return data as any;
+}
+
+export async function deleteAccount(): Promise<{ ok: boolean }> {
+  return await invoke<{ ok: boolean }>("delete-account", {});
 }
 
 

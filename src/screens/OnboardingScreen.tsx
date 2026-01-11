@@ -9,7 +9,17 @@ export function OnboardingScreen({ onComplete }: { navigation: any; onComplete: 
   const { colors, shadows, borderRadius } = useTheme();
   const styles = useMemo(() => makeStyles(colors, shadows, borderRadius), [colors, shadows, borderRadius]);
   // Reuse the same content as the in-app "How to Play" modal.
-  const slides: HowToPlaySlide[] = useMemo(() => HOW_TO_PLAY_SLIDES, []);
+  const slides: HowToPlaySlide[] = useMemo(
+    () => [
+      {
+        emoji: "👋",
+        title: "Welcome to WordCrack",
+        body: "Beat the clock. Choose Cipher or Scramble and climb the leaderboards.",
+      },
+      ...HOW_TO_PLAY_SLIDES,
+    ],
+    [],
+  );
 
   const listRef = useRef<FlatList<HowToPlaySlide>>(null);
   const [idx, setIdx] = useState(0);

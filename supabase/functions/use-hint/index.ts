@@ -5,6 +5,7 @@ import { supabaseAdmin } from "../_shared/supabase.ts";
 import { json } from "../_shared/utils.ts";
 import { withCors } from "../_shared/http.ts";
 import { buildHintMessage, HINT_PENALTY_MS, type HintType } from "../_shared/wordcrack.ts";
+import { assertUpperAlpha } from "../_shared/utils.ts";
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
@@ -17,9 +18,7 @@ Deno.serve(async (req) => {
     const attempt_id = String(body?.attempt_id ?? "");
     const hint_type = String(body?.hint_type ?? "") as HintType;
     if (!attempt_id) return json({ error: "Missing attempt_id" }, { status: 400, headers: corsHeaders });
-    if (!["shift_count", "shift_position", "reveal_letter"].includes(hint_type)) {
-      return json({ error: "Invalid hint_type" }, { status: 400, headers: corsHeaders });
-    }
+    const guess_word = body?.guess_word == null ? null : String(body.guess_word);
 
     const admin = supabaseAdmin();
 
@@ -41,10 +40,23 @@ Deno.serve(async (req) => {
 
     const { data: puzzle, error: puzzleErr } = await admin
       .from("puzzles")
-      .select("id,cipher_word,target_word,theme_hint")
+      .select("id,cipher_word,target_word,theme_hint,variant")
       .eq("id", attempt.puzzle_id)
       .single();
     if (puzzleErr) return json({ error: puzzleErr.message }, { status: 500, headers: corsHeaders });
+
+    const variant = String((puzzle as any)?.variant ?? "scramble");
+    const allowed =
+      variant === "cipher"
+        ? (["shift_amount", "unshifted_positions", "reveal_theme"] as const)
+        : (["check_positions", "reveal_position", "reveal_theme"] as const);
+    if (!(allowed as readonly string[]).includes(hint_type)) {
+      return json({ error: `Invalid hint_type for ${variant} puzzle` }, { status: 400, headers: corsHeaders });
+    }
+    if (hint_type === "check_positions") {
+      // Required so we can evaluate which selected letters are currently correct.
+      assertUpperAlpha(String(guess_word ?? ""), 5);
+    }
 
     const penalty_ms = HINT_PENALTY_MS[hint_type];
     const built = buildHintMessage({
@@ -52,6 +64,7 @@ Deno.serve(async (req) => {
       cipherWord: puzzle.cipher_word,
       targetWord: puzzle.target_word,
       themeHint: puzzle.theme_hint,
+      guessWord: guess_word,
     });
 
     const hintEvent = {

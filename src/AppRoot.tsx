@@ -1,7 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { DarkTheme as NavDarkTheme, DefaultTheme as NavDefaultTheme, NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, StatusBar, View } from "react-native";
+import * as SplashScreen from "expo-splash-screen";
+
+// Keep the splash screen visible until we explicitly hide it
+SplashScreen.preventAutoHideAsync();
 import { AuthProvider, useAuth } from "./state/AuthProvider";
 import { getJson, setJson } from "./lib/storage";
 import { supabase } from "./lib/supabase";
@@ -29,17 +33,18 @@ export type RootStackParamList = {
   Paywall: undefined;
   UpgradeAccount: { postUpgradeTo?: "Paywall" | "Back" } | undefined;
   HowToPlay: undefined;
-  Puzzle: { mode: "daily" | "practice" };
+  Puzzle: { mode: "daily" | "practice"; variant: "cipher" | "scramble" };
   Results: {
     attemptId: string;
     mode: "daily" | "practice";
+    variant: "cipher" | "scramble";
     solve_time_ms: number;
     penalty_ms: number;
     final_time_ms: number;
     hints_used_count: number;
     rank: number | null;
   };
-  Leaderboards: undefined;
+  Leaderboards: { initialTab?: "global" | "cipher" | "scramble" | "friends" } | undefined;
   Stats: undefined;
   Settings: undefined;
   Legal: { doc: "privacy" | "terms" };
@@ -47,16 +52,35 @@ export type RootStackParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
+const SPLASH_MIN_DURATION_MS = 1500; // Minimum time to show splash screen
+
 function BootRouter() {
   const { user, initializing } = useAuth();
   const theme = useTheme();
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
   const [profile, setProfile] = useState<{ username: string; avatar_url: string | null } | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [splashMinElapsed, setSplashMinElapsed] = useState(false);
+  const [splashHidden, setSplashHidden] = useState(false);
+
+  // Minimum splash duration timer
+  useEffect(() => {
+    const timer = setTimeout(() => setSplashMinElapsed(true), SPLASH_MIN_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     getJson<boolean>("wordcrack:onboarded").then((v) => setOnboarded(v ?? false));
   }, []);
+
+  // Hide splash when ready (min time elapsed + initialization complete)
+  const isReady = !initializing && onboarded !== null && splashMinElapsed;
+  useEffect(() => {
+    if (isReady && !splashHidden) {
+      setSplashHidden(true);
+      SplashScreen.hideAsync();
+    }
+  }, [isReady, splashHidden]);
 
   useEffect(() => {
     let mounted = true;
@@ -134,7 +158,7 @@ function BootRouter() {
           )}
         </Stack.Screen>
       ) : !user ? (
-        <Stack.Screen name="Auth" component={AuthScreen} options={{ title: "WordCrack" }} />
+        <Stack.Screen name="Auth" component={AuthScreen} options={{ headerShown: false }} />
       ) : (
         <>
           <Stack.Screen
@@ -155,7 +179,14 @@ function BootRouter() {
               headerShadowVisible: false,
             }}
           />
-          <Stack.Screen name="Puzzle" component={PuzzleScreen} options={{ title: "Today's Puzzle" }} />
+          <Stack.Screen
+            name="Puzzle"
+            component={PuzzleScreen}
+            options={({ route }) => ({
+              title: route.params?.variant === "cipher" ? "Cipher Puzzle" : "Scramble Puzzle",
+              gestureEnabled: false,
+            })}
+          />
           <Stack.Screen name="Results" component={ResultsScreen} options={{ title: "Results" }} />
           <Stack.Screen name="Leaderboards" component={LeaderboardsScreen} options={{ title: "Leaderboards" }} />
           <Stack.Screen name="Stats" component={StatsScreen} options={{ title: "Stats" }} />
@@ -212,6 +243,7 @@ function ThemedApp() {
   return (
     <AuthProvider>
       <IapProvider>
+        <StatusBar barStyle={mode === "dark" ? "light-content" : "dark-content"} />
         <NavigationContainer theme={navTheme}>
           <BootRouter />
         </NavigationContainer>

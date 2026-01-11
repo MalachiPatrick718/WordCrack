@@ -1,9 +1,11 @@
-export type HintType = "shift_count" | "shift_position" | "reveal_letter";
+export type HintType = "check_positions" | "reveal_position" | "reveal_theme" | "shift_amount" | "unshifted_positions";
 
 export const HINT_PENALTY_MS: Record<HintType, number> = {
-  shift_count: 5_000,
-  shift_position: 10_000,
-  reveal_letter: 8_000,
+  check_positions: 5_000,
+  reveal_position: 8_000,
+  reveal_theme: 6_000,
+  shift_amount: 5_000,
+  unshifted_positions: 10_000,
 };
 
 const WORD_LEN = 5;
@@ -52,50 +54,67 @@ export function buildHintMessage(args: {
   cipherWord: string;
   targetWord: string;
   themeHint: string | null;
+  guessWord?: string | null;
 }): { message: string; meta?: Record<string, unknown> } {
-  const shifted = computeShiftedPositions(args.cipherWord, args.targetWord);
-  const amount = shiftAmount(args.cipherWord, args.targetWord);
-  const shiftedIdx = shifted
-    .map((v, i) => ({ v, i }))
-    .filter((x) => x.v)
-    .map((x) => x.i + 1); // 1-based positions
-  const unshiftedIdx = shifted
-    .map((v, i) => ({ v, i }))
-    .filter((x) => !x.v)
-    .map((x) => x.i + 1);
-
-  if (args.hintType === "shift_count") {
-    const count = shiftedIdx.length;
-    const extra = amount != null ? ` Shift amount: ${amount}.` : "";
-    return { message: `${count} of the ${WORD_LEN} letters are shifted.${extra}`, meta: { shiftedCount: count, shiftAmount: amount } };
+  if (args.targetWord.length !== WORD_LEN || args.cipherWord.length !== WORD_LEN) {
+    throw new Error(`Expected ${WORD_LEN}-letter cipher and target words`);
   }
 
-  if (args.hintType === "shift_position") {
+  if (args.hintType === "shift_amount") {
+    const amount = shiftAmount(args.cipherWord, args.targetWord);
+    if (amount == null) return { message: "No shift detected (already solved).", meta: { shiftAmount: null } };
+    return { message: `Shift amount: ${amount} (direction hidden).`, meta: { shiftAmount: amount } };
+  }
+
+  if (args.hintType === "unshifted_positions") {
+    const shifted = computeShiftedPositions(args.cipherWord, args.targetWord);
+    const unshiftedIdx = shifted
+      .map((v, i) => ({ v, i }))
+      .filter((x) => !x.v)
+      .map((x) => x.i + 1);
     if (unshiftedIdx.length === 0) {
       return { message: `All ${WORD_LEN} positions are shifted.`, meta: { unshiftedPositions: [] } };
     }
     const picked = pickRandom(unshiftedIdx, Math.min(2, unshiftedIdx.length));
-    if (picked.length === 1) {
-      return {
-        message: `Position ${picked[0]} is unshifted.`,
-        meta: { unshiftedPositions: picked },
-      };
+    if (picked.length === 1) return { message: `Position ${picked[0]} is unshifted.`, meta: { unshiftedPositions: picked } };
+    return { message: `Positions ${picked[0]} and ${picked[1]} are unshifted.`, meta: { unshiftedPositions: picked } };
+  }
+
+  if (args.hintType === "check_positions") {
+    const guess = String(args.guessWord ?? "");
+    if (guess.length !== WORD_LEN) {
+      return { message: `Select all ${WORD_LEN} letters first, then use this hint.`, meta: { requiresGuess: true } };
+    }
+    const correctPositions = Array.from({ length: WORD_LEN }, (_, i) => (guess[i] === args.targetWord[i] ? i + 1 : null)).filter(
+      (x): x is number => x != null,
+    );
+    const count = correctPositions.length;
+    if (count === 0) {
+      return { message: "None of your selected letters are in the correct position.", meta: { correctCount: 0, correctPositions: [] } };
+    }
+    if (count === WORD_LEN) {
+      return { message: "All 5 letters are in the correct position. Submit!", meta: { correctCount: 5, correctPositions } };
     }
     return {
-      message: `Positions ${picked[0]} and ${picked[1]} are unshifted.`,
-      meta: { unshiftedPositions: picked },
+      message: `Correct positions: ${count} (${correctPositions.join(", ")}).`,
+      meta: { correctCount: count, correctPositions },
     };
   }
 
-  // reveal_letter
-  // Pick 1 random position to reveal (1-based), return the correct target letter at that position.
-  const pos0 = crypto.getRandomValues(new Uint32Array(1))[0] % WORD_LEN; // 0..4
-  const position = pos0 + 1;
-  const letter = args.targetWord[pos0];
-  return {
-    message: `Letter ${letter} goes in position ${position}.`,
-    meta: { position, letter },
-  };
+  if (args.hintType === "reveal_position") {
+    const pos0 = crypto.getRandomValues(new Uint32Array(1))[0] % WORD_LEN; // 0..4
+    const position = pos0 + 1;
+    const letter = args.targetWord[pos0];
+    return {
+      message: `Position ${position} is ${letter}.`,
+      meta: { position, letter },
+    };
+  }
+
+  // reveal_theme
+  const theme = (args.themeHint ?? "").trim();
+  if (!theme) return { message: "No theme hint available for this puzzle.", meta: { theme: null } };
+  return { message: `Theme hint: ${theme}`, meta: { theme } };
 }
 
 

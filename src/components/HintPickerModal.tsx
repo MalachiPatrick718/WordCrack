@@ -5,23 +5,31 @@ import type { HintType } from "../lib/api";
 
 type Item = { type: HintType; title: string; subtitle: string };
 
-const ITEMS: Item[] = [
-  { type: "shift_count", title: "Shift Amount", subtitle: "+5s" },
-  { type: "shift_position", title: "Unshifted Positions", subtitle: "+10s" },
-  { type: "reveal_letter", title: "Reveal Letter", subtitle: "+8s" },
+const SCRAMBLE_ITEMS: Item[] = [
+  { type: "check_positions", title: "Check correct positions", subtitle: "+5s" },
+  { type: "reveal_position", title: "Reveal a position", subtitle: "+8s" },
+  { type: "reveal_theme", title: "Reveal theme hint", subtitle: "+6s" },
+];
+
+const CIPHER_ITEMS: Item[] = [
+  { type: "shift_amount", title: "Shift amount", subtitle: "+5s" },
+  { type: "unshifted_positions", title: "Unshifted positions", subtitle: "+10s" },
+  { type: "reveal_theme", title: "Reveal theme hint", subtitle: "+6s" },
 ];
 
 type Props = {
   visible: boolean;
   remainingHints: number;
+  variant: "cipher" | "scramble";
   usedTypes: Set<HintType>;
   onPick: (type: HintType) => void;
   onClose: () => void;
 };
 
-export function HintPickerModal({ visible, remainingHints, usedTypes, onPick, onClose }: Props) {
+export function HintPickerModal({ visible, remainingHints, variant, usedTypes, onPick, onClose }: Props) {
   const { colors, shadows, borderRadius } = useTheme();
   const styles = useMemo(() => makeStyles(colors, shadows, borderRadius), [colors, shadows, borderRadius]);
+  const items = variant === "cipher" ? CIPHER_ITEMS : SCRAMBLE_ITEMS;
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
@@ -30,7 +38,7 @@ export function HintPickerModal({ visible, remainingHints, usedTypes, onPick, on
           <Text style={styles.subtitle}>Hints remaining: {Math.max(0, remainingHints)}</Text>
 
           <View style={{ width: "100%", gap: 10, marginTop: 14 }}>
-            {ITEMS.map((it) => {
+            {items.map((it) => {
               const used = usedTypes.has(it.type);
               const disabled = used || remainingHints <= 0;
               return (

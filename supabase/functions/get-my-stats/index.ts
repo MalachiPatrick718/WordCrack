@@ -27,10 +27,10 @@ Deno.serve(async (req) => {
     const user = await requireUser(req);
     const admin = supabaseAdmin();
 
-    // Pull recent daily completions with puzzle_date
+    // Pull recent daily completions with puzzle_date + variant
     const { data, error } = await admin
       .from("attempts")
-      .select("final_time_ms,hints_used,puzzles(puzzle_date)")
+      .select("final_time_ms,hints_used,puzzles(puzzle_date,variant)")
       .eq("user_id", user.id)
       .eq("mode", "daily")
       .eq("is_completed", true)
@@ -39,27 +39,26 @@ Deno.serve(async (req) => {
       .limit(60);
     if (error) return json({ error: error.message }, { status: 500, headers: corsHeaders });
 
-    const rows: Row[] = (data ?? [])
+    const rowsAll: (Row & { variant: "cipher" | "scramble" })[] = (data ?? [])
       .map((r: any) => ({
         puzzle_date: r.puzzles?.puzzle_date as string,
+        variant: (r.puzzles?.variant as "cipher" | "scramble") ?? "scramble",
         final_time_ms: r.final_time_ms as number,
         hints_used: r.hints_used,
       }))
-      .filter((r) => Boolean(r.puzzle_date));
+      .filter((r) => Boolean(r.puzzle_date) && (r.variant === "cipher" || r.variant === "scramble"));
 
     const today = getUtcDateString();
-    const best_time_ms = rows.length ? Math.min(...rows.map((r) => r.final_time_ms)) : null;
-
-    const last7 = rows.slice(0, 7).map((r) => r.final_time_ms);
-    const last30 = rows.slice(0, 30).map((r) => r.final_time_ms);
-
-    const hints_used_count = rows.reduce((sum, r) => sum + (Array.isArray(r.hints_used) ? r.hints_used.length : 0), 0);
+    const best_time_ms = rowsAll.length ? Math.min(...rowsAll.map((r) => r.final_time_ms)) : null;
+    const last7 = rowsAll.slice(0, 7).map((r) => r.final_time_ms);
+    const last30 = rowsAll.slice(0, 30).map((r) => r.final_time_ms);
+    const hints_used_count = rowsAll.reduce((sum, r) => sum + (Array.isArray(r.hints_used) ? r.hints_used.length : 0), 0);
 
     // Current streak: consecutive puzzle_date ending today (if today's solved) otherwise 0.
     let current_streak = 0;
     const byDate = Array.from(
       new Set(
-        rows
+        rowsAll
           .map((r) => r.puzzle_date)
           .filter(Boolean),
       ),
@@ -75,6 +74,20 @@ Deno.serve(async (req) => {
       }
     }
 
+    function statsForVariant(variant: "cipher" | "scramble") {
+      const rows = rowsAll.filter((r) => r.variant === variant);
+      const best = rows.length ? Math.min(...rows.map((r) => r.final_time_ms)) : null;
+      const last7v = rows.slice(0, 7).map((r) => r.final_time_ms);
+      const last30v = rows.slice(0, 30).map((r) => r.final_time_ms);
+      const hints = rows.reduce((sum, r) => sum + (Array.isArray(r.hints_used) ? r.hints_used.length : 0), 0);
+      return {
+        best_time_ms: best,
+        avg_7d_ms: avg(last7v),
+        avg_30d_ms: avg(last30v),
+        hint_usage_count: hints,
+      };
+    }
+
     return json(
       {
         current_streak,
@@ -82,6 +95,8 @@ Deno.serve(async (req) => {
         avg_7d_ms: avg(last7),
         avg_30d_ms: avg(last30),
         hint_usage_count: hints_used_count,
+        cipher: statsForVariant("cipher"),
+        scramble: statsForVariant("scramble"),
       },
       { headers: corsHeaders },
     );

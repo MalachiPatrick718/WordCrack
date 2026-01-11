@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, Share, Text, View, StyleSheet } from "react-native";
+import { Alert, Linking, Pressable, Share, Text, View, StyleSheet } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import * as Notifications from "expo-notifications";
 import { RootStackParamList } from "../AppRoot";
 import { useTheme } from "../theme/theme";
 import { enableDailyReminder, getDailyReminderState } from "../lib/notifications";
@@ -18,7 +19,7 @@ function fmtMs(ms: number): string {
 export function ResultsScreen({ navigation, route }: Props) {
   const { colors, shadows, borderRadius } = useTheme();
   const styles = useMemo(() => makeStyles(colors, shadows, borderRadius), [colors, shadows, borderRadius]);
-  const { solve_time_ms, penalty_ms, final_time_ms, hints_used_count, rank, mode } = route.params;
+  const { solve_time_ms, penalty_ms, final_time_ms, hints_used_count, rank, mode, variant } = route.params;
   const [reminderEnabled, setReminderEnabled] = useState(false);
 
   useEffect(() => {
@@ -61,8 +62,13 @@ export function ResultsScreen({ navigation, route }: Props) {
         <Text style={styles.finalTimeLabel}>Final Time</Text>
         <Text style={styles.finalTimeValue}>{fmtMs(final_time_ms)}</Text>
         {rank && (
-          <View style={styles.rankBadge}>
-            <Text style={styles.rankText}>#{rank} Global</Text>
+          <View style={styles.rankBadges}>
+            <View style={styles.rankBadge}>
+              <Text style={styles.rankText}>#{rank} Global</Text>
+            </View>
+            <View style={[styles.rankBadge, styles.variantRankBadge]}>
+              <Text style={styles.rankText}>#{rank} {variant === "cipher" ? "Cipher" : "Scramble"}</Text>
+            </View>
           </View>
         )}
       </View>
@@ -119,7 +125,9 @@ export function ResultsScreen({ navigation, route }: Props) {
 
         <Pressable
           accessibilityRole="button"
-          onPress={() => navigation.navigate("Leaderboards")}
+          onPress={() =>
+            navigation.navigate("Leaderboards", { initialTab: variant === "cipher" ? "cipher" : "scramble" })
+          }
           style={({ pressed }) => [
             styles.leaderboardButton,
             pressed && { opacity: 0.9 },
@@ -133,13 +141,26 @@ export function ResultsScreen({ navigation, route }: Props) {
             accessibilityRole="button"
             onPress={async () => {
               try {
+                const req = await Notifications.requestPermissionsAsync();
+                const granted = (req as any)?.granted === true || req.status === "granted";
+                if (!granted) {
+                  Alert.alert(
+                    "Enable notifications",
+                    "To turn on hourly reminders, allow notifications for WordCrack. If you previously denied it, enable it in system settings.",
+                    [
+                      { text: "Not now", style: "cancel" },
+                      { text: "Open Settings", onPress: () => void Linking.openSettings().catch(() => undefined) },
+                    ],
+                  );
+                  return;
+                }
                 await enableDailyReminder();
                 setReminderEnabled(true);
                 Alert.alert(
                   "Hourly reminders enabled",
                   (typeof __DEV__ !== "undefined" && __DEV__)
-                    ? "Testing mode: you’ll get a notification every 2 minutes. You can turn this off in Settings."
-                    : "We’ll notify you when a new hourly puzzle is available. You can turn this off in Settings.",
+                    ? "You’ll get notified at the top of each UTC hour when a new puzzle unlocks. You can turn this off in Settings."
+                    : "We’ll notify you at the top of each UTC hour when a new puzzle unlocks. You can turn this off in Settings.",
                 );
               } catch (e: any) {
                 Alert.alert("Couldn't enable reminder", e?.message ?? "Unknown error");
@@ -216,12 +237,21 @@ function makeStyles(colors: any, shadows: any, borderRadius: any) {
     color: colors.text.light,
     fontVariant: ["tabular-nums"],
   },
+  rankBadges: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 12,
+  },
   rankBadge: {
     backgroundColor: colors.primary.yellow,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: borderRadius.round,
-    marginTop: 12,
+  },
+  variantRankBadge: {
+    backgroundColor: colors.primary.lightBlue,
   },
   rankText: {
     fontSize: 16,

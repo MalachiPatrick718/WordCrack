@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
     const admin = supabaseAdmin();
     const { data, error } = await admin
       .from("global_rankings")
-      .select("user_id,username,avatar_url,puzzles_solved,avg_final_time_ms")
+      .select("user_id,username,avatar_url,location,puzzles_solved,avg_final_time_ms")
       .gte("puzzles_solved", minSolved)
       .order("avg_final_time_ms", { ascending: true })
       .order("puzzles_solved", { ascending: false })

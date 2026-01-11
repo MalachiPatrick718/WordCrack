@@ -27,13 +27,13 @@ export function IncorrectModal({ visible, attemptsRemaining, onTryAgain }: Props
 
           <Text style={styles.title}>Not Quite!</Text>
           <Text style={styles.message}>
-            That's not the right word. Keep cracking the cipher!
+            That's not the right word. Keep rearranging!
           </Text>
 
           {attemptsRemaining !== undefined && (
             <View style={styles.hintBox}>
               <Text style={styles.hintText}>
-                💡 Tip: Use hints to reveal shifted positions or the theme
+                💡 Tip: Use hints to check correct positions or reveal a position
               </Text>
             </View>
           )}

@@ -64,56 +64,104 @@ export function StatsScreen({ navigation }: Props) {
             <Text style={styles.streakLabel}>Day Streak</Text>
           </View>
 
-          {/* Stats Grid */}
-          <View style={styles.statsGrid}>
-            <View style={[styles.statCard, { backgroundColor: colors.tiles[0] }]}>
-              <Text style={styles.statIcon}>⚡</Text>
-              <Text style={styles.statValue}>{fmtMs(stats.best_time_ms)}</Text>
-              <Text style={styles.statLabel}>Best Time</Text>
+          {/* Cipher vs Scramble */}
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Cipher</Text>
+            <View style={styles.statsGrid}>
+              <View style={[styles.statCard, { backgroundColor: colors.tiles[0] }]}>
+                <Text style={styles.statIcon}>⚡</Text>
+                <Text style={styles.statValue}>{fmtMs(stats.cipher.best_time_ms)}</Text>
+                <Text style={styles.statLabel}>Best Time</Text>
+              </View>
+              {iap.premium ? (
+                <View style={[styles.statCard, { backgroundColor: colors.tiles[1] }]}>
+                  <Text style={styles.statIcon}>💡</Text>
+                  <Text style={styles.statValue}>{stats.cipher.hint_usage_count}</Text>
+                  <Text style={styles.statLabel}>Hints Used</Text>
+                </View>
+              ) : (
+                <View style={[styles.statCard, { backgroundColor: colors.tiles[1], opacity: 0.75 }]}>
+                  <Text style={styles.statIcon}>⭐</Text>
+                  <Text style={styles.statValue}>Premium</Text>
+                  <Text style={styles.statLabel}>Unlock more stats</Text>
+                </View>
+              )}
             </View>
-
             {iap.premium ? (
-              <View style={[styles.statCard, { backgroundColor: colors.tiles[1] }]}>
-                <Text style={styles.statIcon}>💡</Text>
-                <Text style={styles.statValue}>{stats.hint_usage_count}</Text>
-                <Text style={styles.statLabel}>Hints Used</Text>
+              <View style={styles.averagesCard}>
+                <Text style={styles.cardTitle}>Average Times</Text>
+                <View style={styles.averageRow}>
+                  <View style={styles.averageInfo}>
+                    <Text style={styles.averageLabel}>Last 7 Days</Text>
+                    <Text style={styles.averageValue}>{fmtMs(stats.cipher.avg_7d_ms)}</Text>
+                  </View>
+                  <View style={[styles.averageBadge, { backgroundColor: colors.tiles[2] }]}>
+                    <Text style={styles.averageBadgeText}>7D</Text>
+                  </View>
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.averageRow}>
+                  <View style={styles.averageInfo}>
+                    <Text style={styles.averageLabel}>Last 30 Days</Text>
+                    <Text style={styles.averageValue}>{fmtMs(stats.cipher.avg_30d_ms)}</Text>
+                  </View>
+                  <View style={[styles.averageBadge, { backgroundColor: colors.tiles[4] }]}>
+                    <Text style={styles.averageBadgeText}>30D</Text>
+                  </View>
+                </View>
               </View>
-            ) : (
-              <View style={[styles.statCard, { backgroundColor: colors.tiles[1], opacity: 0.75 }]}>
-                <Text style={styles.statIcon}>⭐</Text>
-                <Text style={styles.statValue}>Premium</Text>
-                <Text style={styles.statLabel}>Unlock more stats</Text>
-              </View>
-            )}
+            ) : null}
           </View>
 
-          {iap.premium ? (
-            <View style={styles.averagesCard}>
-              <Text style={styles.cardTitle}>Average Times</Text>
-
-              <View style={styles.averageRow}>
-                <View style={styles.averageInfo}>
-                  <Text style={styles.averageLabel}>Last 7 Days</Text>
-                  <Text style={styles.averageValue}>{fmtMs(stats.avg_7d_ms)}</Text>
-                </View>
-                <View style={[styles.averageBadge, { backgroundColor: colors.tiles[2] }]}>
-                  <Text style={styles.averageBadgeText}>7D</Text>
-                </View>
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Scramble</Text>
+            <View style={styles.statsGrid}>
+              <View style={[styles.statCard, { backgroundColor: colors.tiles[2] }]}>
+                <Text style={styles.statIcon}>⚡</Text>
+                <Text style={styles.statValue}>{fmtMs(stats.scramble.best_time_ms)}</Text>
+                <Text style={styles.statLabel}>Best Time</Text>
               </View>
-
-              <View style={styles.divider} />
-
-              <View style={styles.averageRow}>
-                <View style={styles.averageInfo}>
-                  <Text style={styles.averageLabel}>Last 30 Days</Text>
-                  <Text style={styles.averageValue}>{fmtMs(stats.avg_30d_ms)}</Text>
+              {iap.premium ? (
+                <View style={[styles.statCard, { backgroundColor: colors.tiles[3] }]}>
+                  <Text style={styles.statIcon}>💡</Text>
+                  <Text style={styles.statValue}>{stats.scramble.hint_usage_count}</Text>
+                  <Text style={styles.statLabel}>Hints Used</Text>
                 </View>
-                <View style={[styles.averageBadge, { backgroundColor: colors.tiles[4] }]}>
-                  <Text style={styles.averageBadgeText}>30D</Text>
+              ) : (
+                <View style={[styles.statCard, { backgroundColor: colors.tiles[3], opacity: 0.75 }]}>
+                  <Text style={styles.statIcon}>⭐</Text>
+                  <Text style={styles.statValue}>Premium</Text>
+                  <Text style={styles.statLabel}>Unlock more stats</Text>
                 </View>
-              </View>
+              )}
             </View>
-          ) : (
+            {iap.premium ? (
+              <View style={styles.averagesCard}>
+                <Text style={styles.cardTitle}>Average Times</Text>
+                <View style={styles.averageRow}>
+                  <View style={styles.averageInfo}>
+                    <Text style={styles.averageLabel}>Last 7 Days</Text>
+                    <Text style={styles.averageValue}>{fmtMs(stats.scramble.avg_7d_ms)}</Text>
+                  </View>
+                  <View style={[styles.averageBadge, { backgroundColor: colors.tiles[0] }]}>
+                    <Text style={styles.averageBadgeText}>7D</Text>
+                  </View>
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.averageRow}>
+                  <View style={styles.averageInfo}>
+                    <Text style={styles.averageLabel}>Last 30 Days</Text>
+                    <Text style={styles.averageValue}>{fmtMs(stats.scramble.avg_30d_ms)}</Text>
+                  </View>
+                  <View style={[styles.averageBadge, { backgroundColor: colors.tiles[1] }]}>
+                    <Text style={styles.averageBadgeText}>30D</Text>
+                  </View>
+                </View>
+              </View>
+            ) : null}
+          </View>
+
+          {!iap.premium ? (
             <Pressable
               accessibilityRole="button"
               onPress={() => (isAnonymous ? navigation.navigate("UpgradeAccount", { postUpgradeTo: "Paywall" }) : navigation.navigate("Paywall"))}
@@ -123,7 +171,7 @@ export function StatsScreen({ navigation }: Props) {
               <Text style={styles.upgradeText}>Upgrade to WordCrack Premium to see averages, trends, and more.</Text>
               <Text style={styles.upgradeCta}>Upgrade</Text>
             </Pressable>
-          )}
+          ) : null}
         </>
       )}
     </View>
@@ -177,7 +225,20 @@ function makeStyles(colors: any, shadows: any, borderRadius: any) {
   statsGrid: {
     flexDirection: "row",
     gap: 12,
+    marginBottom: 0,
+  },
+  sectionCard: {
+    backgroundColor: colors.background.card,
+    borderRadius: borderRadius.xl,
+    padding: 16,
     marginBottom: 16,
+    ...shadows.small,
+  },
+  sectionTitle: {
+    fontWeight: "900",
+    fontSize: 16,
+    color: colors.text.primary,
+    marginBottom: 12,
   },
   statCard: {
     flex: 1,

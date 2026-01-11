@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Image, Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
+import { Alert, Image, Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import { RootStackParamList } from "../AppRoot";
 import { useTheme } from "../theme/theme";
-import { getTodayPuzzle } from "../lib/api";
+import { getTodayPuzzleByVariant } from "../lib/api";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../state/AuthProvider";
 import { useIap } from "../purchases/IapProvider";
@@ -34,10 +34,19 @@ function getPuzzleWindowKey(now = new Date()): string {
 
 function formatHms(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
-  const hh = String(Math.floor(s / 3600)).padStart(2, "0");
-  const mm = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
-  const ss = String(s % 60).padStart(2, "0");
-  return `${hh}:${mm}:${ss}`;
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+
+  const hh = String(h).padStart(2, "0");
+  const mm = String(m).padStart(2, "0");
+  const ss = String(sec).padStart(2, "0");
+
+  // Drop leading "00:" groups for a cleaner countdown.
+  // Examples: 00:32:10 -> 32:10, 00:00:09 -> 09, 01:05:00 -> 01:05:00
+  if (h > 0) return `${hh}:${mm}:${ss}`;
+  if (m > 0) return `${mm}:${ss}`;
+  return ss;
 }
 
 export function HomeScreen({ navigation }: Props) {
@@ -47,10 +56,11 @@ export function HomeScreen({ navigation }: Props) {
   const { colors, shadows, borderRadius } = theme;
   const isFocused = useIsFocused();
   const [tick, setTick] = useState(0);
-  const [solvedCurrentPuzzle, setSolvedCurrentPuzzle] = useState<boolean>(false);
+  const [solvedCipher, setSolvedCipher] = useState<boolean>(false);
+  const [solvedScramble, setSolvedScramble] = useState<boolean>(false);
   const [username, setUsername] = useState<string>("player");
-  const [currentPuzzleId, setCurrentPuzzleId] = useState<string | null>(null);
-  const currentPuzzleIdRef = useRef<string | null>(null);
+  const currentCipherIdRef = useRef<string | null>(null);
+  const currentScrambleIdRef = useRef<string | null>(null);
   const prevWindowRef = useRef<string>(getPuzzleWindowKey());
 
   // Always keep the countdown ticking (smooth UX).
@@ -61,24 +71,42 @@ export function HomeScreen({ navigation }: Props) {
 
   const refreshPuzzleAndSolved = async () => {
     if (!user) return;
-    const puzzle = await getTodayPuzzle();
-    if (puzzle.id !== currentPuzzleIdRef.current) {
-      // New puzzle window (or first load): avoid UI flicker by resetting completion only after we know we have a new puzzle id.
-      setSolvedCurrentPuzzle(false);
-      setCurrentPuzzleId(puzzle.id);
-      currentPuzzleIdRef.current = puzzle.id;
+    const [cipherPuzzle, scramblePuzzle] = await Promise.all([
+      getTodayPuzzleByVariant("cipher"),
+      getTodayPuzzleByVariant("scramble"),
+    ]);
+
+    // Reset solved flags when a new hour's puzzle id appears.
+    if (cipherPuzzle.id !== currentCipherIdRef.current) {
+      setSolvedCipher(false);
+      currentCipherIdRef.current = cipherPuzzle.id;
+    }
+    if (scramblePuzzle.id !== currentScrambleIdRef.current) {
+      setSolvedScramble(false);
+      currentScrambleIdRef.current = scramblePuzzle.id;
     }
 
-    const { data, error } = await supabase
-      .from("attempts")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("puzzle_id", puzzle.id)
-      .eq("mode", "daily")
-      .eq("is_completed", true)
-      .limit(1);
-    if (error) return;
-    setSolvedCurrentPuzzle((data?.length ?? 0) > 0);
+    const [cipherAttempts, scrambleAttempts] = await Promise.all([
+      supabase
+        .from("attempts")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("puzzle_id", cipherPuzzle.id)
+        .eq("mode", "daily")
+        .eq("is_completed", true)
+        .limit(1),
+      supabase
+        .from("attempts")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("puzzle_id", scramblePuzzle.id)
+        .eq("mode", "daily")
+        .eq("is_completed", true)
+        .limit(1),
+    ]);
+
+    if (!cipherAttempts.error) setSolvedCipher((cipherAttempts.data?.length ?? 0) > 0);
+    if (!scrambleAttempts.error) setSolvedScramble((scrambleAttempts.data?.length ?? 0) > 0);
   };
 
   // When the UTC hour boundary passes, refresh puzzle state (only while Home is focused).
@@ -143,13 +171,13 @@ export function HomeScreen({ navigation }: Props) {
         },
         content: {
           flexGrow: 1,
-          paddingTop: 18,
+          paddingTop: 0,
           paddingBottom: 40,
           justifyContent: "flex-start",
         },
         logoWrap: {
           alignItems: "center",
-          marginBottom: 12,
+          marginBottom: 8,
         },
         logoCard: {
           backgroundColor: "transparent",
@@ -157,11 +185,11 @@ export function HomeScreen({ navigation }: Props) {
           padding: 0,
         },
         logoCentered: {
-          width: 140,
-          height: 140,
+          width: 120,
+          height: 120,
         },
         welcome: {
-          marginTop: 6,
+          marginTop: 4,
           fontSize: 16,
           fontWeight: "700",
           color: colors.text.secondary,
@@ -337,7 +365,7 @@ export function HomeScreen({ navigation }: Props) {
       {/* Puzzle Card */}
       <View style={styles.todayCard}>
         <View style={styles.todayHeader}>
-          <Text style={styles.todayLabel}>{solvedCurrentPuzzle ? "Next Puzzle" : "WordCrack Puzzle"}</Text>
+          <Text style={styles.todayLabel}>WordCrack Puzzle</Text>
           <View style={styles.dateBadge}>
             <Text style={styles.dateText}>{today}</Text>
           </View>
@@ -346,33 +374,49 @@ export function HomeScreen({ navigation }: Props) {
         {/* Show countdown to next puzzle */}
         <View style={styles.countdownContainer}>
           <Text style={styles.countdownLabel}>
-            {solvedCurrentPuzzle ? "Next puzzle in" : "Time remaining"}
+            {"Time remaining"}
           </Text>
           <Text style={styles.countdown}>{countdown}</Text>
         </View>
 
-        {!solvedCurrentPuzzle ? (
+        <View style={{ gap: 10, marginTop: 14 }}>
           <Pressable
             accessibilityRole="button"
-            onPress={() => navigation.navigate("Puzzle", { mode: "daily" })}
+            disabled={solvedCipher}
+            onPress={() => navigation.navigate("Puzzle", { mode: "daily", variant: "cipher" })}
             style={({ pressed }) => [
               styles.solveButton,
-              pressed && { opacity: 0.92 },
+              { backgroundColor: solvedCipher ? colors.primary.green : colors.primary.orange },
+              pressed && !solvedCipher && { opacity: 0.92 },
             ]}
           >
-            <Text style={styles.solveButtonText}>Solve Current Puzzle</Text>
+            <Text style={styles.solveButtonText}>{solvedCipher ? "Cipher Completed" : "Solve Cipher Puzzle"}</Text>
           </Pressable>
-        ) : (
-          <View style={styles.solvedBadge}>
-            <Text style={styles.solvedText}>Completed!</Text>
-          </View>
-        )}
+          <Pressable
+            accessibilityRole="button"
+            disabled={solvedScramble}
+            onPress={() => navigation.navigate("Puzzle", { mode: "daily", variant: "scramble" })}
+            style={({ pressed }) => [
+              styles.solveButton,
+              { backgroundColor: solvedScramble ? colors.primary.green : colors.primary.cyan },
+              pressed && !solvedScramble && { opacity: 0.92 },
+            ]}
+          >
+            <Text style={styles.solveButtonText}>{solvedScramble ? "Scramble Completed" : "Solve Scramble Puzzle"}</Text>
+          </Pressable>
+        </View>
       </View>
 
       {/* Practice Button (Premium) */}
           <Pressable
             accessibilityRole="button"
-            onPress={() => navigation.navigate("Puzzle", { mode: "practice" })}
+            onPress={() => {
+              Alert.alert("Practice Puzzles", "Choose a puzzle type:", [
+                { text: "Cancel", style: "cancel" },
+                { text: "Cipher Practice", onPress: () => navigation.navigate("Puzzle", { mode: "practice", variant: "cipher" }) },
+                { text: "Scramble Practice", onPress: () => navigation.navigate("Puzzle", { mode: "practice", variant: "scramble" }) },
+              ]);
+            }}
             style={({ pressed }) => [
               styles.practiceButton,
               pressed && { opacity: 0.92 },

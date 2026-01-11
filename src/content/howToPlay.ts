@@ -3,48 +3,28 @@ export type HowToPlaySlide = { title: string; body: string; emoji: string };
 export const HOW_TO_PLAY_SLIDES: HowToPlaySlide[] = [
   {
     emoji: "🧩",
-    title: "Goal",
-    body: "Crack the 5‑letter word as fast as possible. Everyone gets the same puzzle for the current timer window.",
+    title: "Crack the Word",
+    body: "Solve the 5-letter word as fast as you can. New puzzles every hour—everyone gets the same challenge!",
   },
   {
-    emoji: "👤",
-    title: "Guest Mode",
-    body: "No account required to play. Use Guest Mode if you want to let friends try WordCrack—upgrade later to save progress across devices.",
+    emoji: "🔐",
+    title: "Cipher Puzzle",
+    body: "Letters are shifted by the same amount (A-Z wraps). Use the theme hint to crack the code!",
   },
   {
-    emoji: "🔤",
-    title: "Ciphered Word",
-    body: "You’ll see a cipher word. It’s created from the hidden target using one shift amount (some positions may be unshifted).",
+    emoji: "🔀",
+    title: "Scramble Puzzle",
+    body: "The letters are jumbled up. Rearrange them to spell the correct word.",
   },
   {
-    emoji: "🎛️",
-    title: "Choose Letters",
-    body: "There are 5 columns. Each column has 5 letters. Use ▲/▼ to cycle and build your guess.",
-  },
-  {
-    emoji: "▶️",
-    title: "Start & Pause",
-    body: "Tap Start to begin the timer. You can pause/resume—letters lock while paused.",
-  },
-  {
-    emoji: "💡",
-    title: "Hints",
-    body: "Up to 3 hints total. Each hint adds a time penalty. Shift Amount reveals the amount (not direction).",
-  },
-  {
-    emoji: "⏱️",
-    title: "Scoring",
-    body: "Final time = solve time + penalties. Faster is better.",
+    emoji: "🎮",
+    title: "How to Play",
+    body: "Use ▲/▼ to cycle through letters in each column. Use hints if stuck (adds time penalty). Tap Start when ready!",
   },
   {
     emoji: "🏆",
-    title: "Leaderboards",
-    body: "Daily puzzles are leaderboard‑eligible. Practice puzzles help you build skill + speed and never count toward leaderboards.",
-  },
-  {
-    emoji: "⭐",
-    title: "Premium",
-    body: "Premium unlocks unlimited practice puzzles, friends, and advanced stats.",
+    title: "Compete & Win",
+    body: "Race for the fastest time on daily leaderboards. Go Premium for unlimited practice and friends!",
   },
 ];
 

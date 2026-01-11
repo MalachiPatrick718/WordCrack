@@ -10,12 +10,17 @@ function getPuzzleSlot(now = new Date()): number {
 Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
-  if (req.method !== "GET") return json({ error: "Method not allowed" }, { status: 405, headers: corsHeaders });
+  if (req.method !== "GET" && req.method !== "POST") return json({ error: "Method not allowed" }, { status: 405, headers: corsHeaders });
 
   try {
     const url = new URL(req.url);
-    const date = url.searchParams.get("date") ?? getUtcDateString();
-    const slotParam = url.searchParams.get("slot") ?? url.searchParams.get("hour");
+    const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
+    const date = (String((body as any)?.date ?? "") || url.searchParams.get("date") || getUtcDateString()) as string;
+    const slotParam = (body as any)?.slot ?? (body as any)?.hour ?? url.searchParams.get("slot") ?? url.searchParams.get("hour");
+    const variant = String((body as any)?.variant ?? url.searchParams.get("variant") ?? "scramble").toLowerCase();
+    if (variant !== "cipher" && variant !== "scramble") {
+      return json({ error: "Invalid variant (expected cipher|scramble)" }, { status: 400, headers: corsHeaders });
+    }
     const slot = slotParam == null ? getPuzzleSlot() : Number(slotParam);
     if (!Number.isFinite(slot) || slot < 0 || slot > 23) {
       return json({ error: "Invalid slot (expected 0-23)" }, { status: 400, headers: corsHeaders });
@@ -26,9 +31,10 @@ Deno.serve(async (req) => {
 
     const { data, error } = await admin
       .from("daily_leaderboard")
-      .select("puzzle_date,puzzle_hour,puzzle_id,user_id,username,avatar_url,final_time_ms,penalty_ms,hints_used_count")
+      .select("puzzle_date,puzzle_hour,variant,puzzle_id,user_id,username,avatar_url,location,final_time_ms,penalty_ms,hints_used_count")
       .eq("puzzle_date", date)
       .eq("puzzle_hour", slot)
+      .eq("variant", variant)
       .order("final_time_ms", { ascending: true })
       .limit(limit);
     if (error) return json({ error: error.message }, { status: 500, headers: corsHeaders });
@@ -45,7 +51,7 @@ Deno.serve(async (req) => {
       return { ...e, is_premium };
     });
 
-    return json({ date, slot, entries }, { headers: corsHeaders });
+    return json({ date, slot, variant, entries }, { headers: corsHeaders });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     return json({ error: msg }, { status: 500, headers: corsHeaders });

@@ -10,6 +10,7 @@ type AuthState = {
   signInGuest: () => Promise<void>;
   signInWithEmailOtp: (email: string) => Promise<void>;
   verifyEmailOtp: (email: string, token: string) => Promise<void>;
+  signInWithPassword: (email: string, password: string) => Promise<void>;
 };
 
 const Ctx = createContext<AuthState | null>(null);
@@ -61,6 +62,10 @@ export function AuthProvider(props: { children: React.ReactNode }) {
       },
       verifyEmailOtp: async (email: string, token: string) => {
         const { error } = await supabase.auth.verifyOtp({ email, token, type: "email" });
+        if (error) throw error;
+      },
+      signInWithPassword: async (email: string, password: string) => {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       },
     };

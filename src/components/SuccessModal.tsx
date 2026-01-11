@@ -27,7 +27,7 @@ export function SuccessModal({ visible, finalTime, rank, onContinue }: Props) {
           </View>
 
           <Text style={styles.title}>Cracked!</Text>
-          <Text style={styles.subtitle}>You solved the cipher!</Text>
+          <Text style={styles.subtitle}>You solved the word!</Text>
 
           {/* Time Display */}
           <View style={styles.timeContainer}>
