@@ -16,8 +16,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.wordcrack.app",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false,
-        "UIViewControllerBasedStatusBarAppearance": true
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -33,8 +32,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-secure-store",
-      "expo-splash-screen"
+      "expo-secure-store"
     ],
     "extra": {
       "supabaseUrl": "https://bqdsadzvihhvermeobiv.supabase.co",

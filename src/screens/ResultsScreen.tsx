@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, Linking, Pressable, Share, Text, View, StyleSheet } from "react-native";
+import { Alert, Linking, Pressable, ScrollView, Share, Text, View, StyleSheet } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Notifications from "expo-notifications";
 import { RootStackParamList } from "../AppRoot";
@@ -50,7 +50,11 @@ export function ResultsScreen({ navigation, route }: Props) {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+    >
       {/* Success Header */}
       <View style={styles.successHeader}>
         <Text style={styles.successEmoji}>🎉</Text>
@@ -176,8 +180,6 @@ export function ResultsScreen({ navigation, route }: Props) {
         ) : null}
       </View>
 
-      <View style={{ flex: 1 }} />
-
       {/* Home Button */}
       <Pressable
         accessibilityRole="button"
@@ -194,7 +196,7 @@ export function ResultsScreen({ navigation, route }: Props) {
       >
         <Text style={styles.homeButtonText}>Back to Home</Text>
       </Pressable>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -203,7 +205,11 @@ function makeStyles(colors: any, shadows: any, borderRadius: any) {
   container: {
     flex: 1,
     backgroundColor: colors.background.main,
+  },
+  scrollContent: {
+    flexGrow: 1,
     padding: 16,
+    paddingBottom: 32,
   },
   successHeader: {
     alignItems: "center",
@@ -344,6 +350,7 @@ function makeStyles(colors: any, shadows: any, borderRadius: any) {
     borderRadius: borderRadius.large,
     padding: 16,
     alignItems: "center",
+    marginTop: 24,
     ...shadows.small,
   },
   homeButtonText: {

@@ -1,11 +1,7 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { DarkTheme as NavDarkTheme, DefaultTheme as NavDefaultTheme, NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { ActivityIndicator, StatusBar, View } from "react-native";
-import * as SplashScreen from "expo-splash-screen";
-
-// Keep the splash screen visible until we explicitly hide it
-SplashScreen.preventAutoHideAsync();
 import { AuthProvider, useAuth } from "./state/AuthProvider";
 import { getJson, setJson } from "./lib/storage";
 import { supabase } from "./lib/supabase";
@@ -52,35 +48,16 @@ export type RootStackParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-const SPLASH_MIN_DURATION_MS = 1500; // Minimum time to show splash screen
-
 function BootRouter() {
   const { user, initializing } = useAuth();
   const theme = useTheme();
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
   const [profile, setProfile] = useState<{ username: string; avatar_url: string | null } | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
-  const [splashMinElapsed, setSplashMinElapsed] = useState(false);
-  const [splashHidden, setSplashHidden] = useState(false);
-
-  // Minimum splash duration timer
-  useEffect(() => {
-    const timer = setTimeout(() => setSplashMinElapsed(true), SPLASH_MIN_DURATION_MS);
-    return () => clearTimeout(timer);
-  }, []);
 
   useEffect(() => {
     getJson<boolean>("wordcrack:onboarded").then((v) => setOnboarded(v ?? false));
   }, []);
-
-  // Hide splash when ready (min time elapsed + initialization complete)
-  const isReady = !initializing && onboarded !== null && splashMinElapsed;
-  useEffect(() => {
-    if (isReady && !splashHidden) {
-      setSplashHidden(true);
-      SplashScreen.hideAsync();
-    }
-  }, [isReady, splashHidden]);
 
   useEffect(() => {
     let mounted = true;

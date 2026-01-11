@@ -24,6 +24,9 @@ verify_jwt = false
 [functions.get-my-stats]
 verify_jwt = false
 
+[functions.get-global-rankings]
+verify_jwt = false
+
 [functions.get-practice-puzzle]
 verify_jwt = false
 

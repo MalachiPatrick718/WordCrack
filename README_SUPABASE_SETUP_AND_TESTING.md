@@ -148,6 +148,7 @@ Your app calls these functions:
 - `get-friends-leaderboard`
 - `add-friend-by-invite-code`
 - `get-my-stats`
+- `get-global-rankings`
 - `validate-purchase` (IAP entitlement)
 - `get-practice-puzzle` (premium practice)
 
@@ -162,6 +163,7 @@ From `WordCrack/`:
 - `supabase functions deploy get-friends-leaderboard`
 - `supabase functions deploy add-friend-by-invite-code`
 - `supabase functions deploy get-my-stats`
+- `supabase functions deploy get-global-rankings`
 - `supabase functions deploy validate-purchase`
 - `supabase functions deploy get-practice-puzzle`
 
