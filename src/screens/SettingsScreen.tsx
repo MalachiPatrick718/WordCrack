@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, Linking, Modal, Pressable, ScrollView, Switch, Text, TextInput, View, StyleSheet } from "react-native";
+import { Alert, Linking, Pressable, ScrollView, Switch, Text, TextInput, View, StyleSheet } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Notifications from "expo-notifications";
 import { getJson, setJson } from "../lib/storage";
@@ -26,7 +26,6 @@ export function SettingsScreen({ navigation }: Props) {
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
   const [sendingFeedback, setSendingFeedback] = useState(false);
-  const [showComingSoon, setShowComingSoon] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [iapDebugEnabled, setIapDebugEnabled] = useState(false);
   const [debugTapCount, setDebugTapCount] = useState(0);
@@ -573,57 +572,6 @@ export function SettingsScreen({ navigation }: Props) {
         <Text style={styles.version}>WordCrack v1.0.0</Text>
       </Pressable>
 
-      {/* Coming Soon Modal */}
-      <Modal
-        visible={showComingSoon}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowComingSoon(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalIconContainer}>
-              <Text style={styles.modalIcon}>🚀</Text>
-            </View>
-            <Text style={styles.modalTitle}>Coming Soon!</Text>
-            <Text style={styles.modalDescription}>
-              WordCrack Premium is launching soon with amazing features:
-            </Text>
-            <View style={styles.featuresList}>
-              <View style={styles.featureItem}>
-                <Text style={styles.featureEmoji}>🧩</Text>
-                <Text style={styles.featureText}>Unlimited practice puzzles</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Text style={styles.featureEmoji}>👥</Text>
-                <Text style={styles.featureText}>Friends leaderboards</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Text style={styles.featureEmoji}>📊</Text>
-                <Text style={styles.featureText}>Advanced statistics</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Text style={styles.featureEmoji}>🎯</Text>
-                <Text style={styles.featureText}>Exclusive puzzle themes</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Text style={styles.featureEmoji}>🏆</Text>
-                <Text style={styles.featureText}>Premium profile badges</Text>
-              </View>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setShowComingSoon(false)}
-              style={({ pressed }) => [
-                styles.modalButton,
-                pressed && { opacity: 0.9 },
-              ]}
-            >
-              <Text style={styles.modalButtonText}>Got it!</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
     </ScrollView>
   );
 }
@@ -858,77 +806,5 @@ const makeStyles = (colors: any, shadows: any, borderRadius: any) => StyleSheet.
     fontSize: 12,
     marginTop: 8,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  modalCard: {
-    backgroundColor: colors.background.card,
-    borderRadius: borderRadius.xl,
-    padding: 28,
-    width: "100%",
-    maxWidth: 340,
-    alignItems: "center",
-    ...shadows.large,
-  },
-  modalIconContainer: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: colors.primary.yellow + "20",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-  modalIcon: {
-    fontSize: 48,
-  },
-  modalTitle: {
-    fontSize: 28,
-    fontWeight: "900",
-    color: colors.primary.yellow,
-    marginBottom: 8,
-  },
-  modalDescription: {
-    fontSize: 15,
-    color: colors.text.secondary,
-    textAlign: "center",
-    lineHeight: 22,
-    marginBottom: 20,
-  },
-  featuresList: {
-    width: "100%",
-    gap: 12,
-    marginBottom: 24,
-  },
-  featureItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  featureEmoji: {
-    fontSize: 20,
-  },
-  featureText: {
-    fontSize: 15,
-    color: colors.text.primary,
-    fontWeight: "600",
-  },
-  modalButton: {
-    backgroundColor: colors.primary.yellow,
-    borderRadius: borderRadius.large,
-    paddingVertical: 16,
-    paddingHorizontal: 48,
-    width: "100%",
-    alignItems: "center",
-    ...shadows.small,
-  },
-  modalButtonText: {
-    color: colors.primary.darkBlue,
-    fontSize: 18,
-    fontWeight: "800",
-  },
+  // (Removed) Coming-soon modal styles: App Review requires IAP flows to be functional.
 });

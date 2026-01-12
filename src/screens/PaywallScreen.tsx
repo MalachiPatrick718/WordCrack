@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../AppRoot";
 import { useIap } from "../purchases/IapProvider";
@@ -22,6 +22,7 @@ export function PaywallScreen({ navigation }: Props) {
 
   const annualPrice = annual?.localizedPrice ?? "Annual";
   const monthlyPrice = monthly?.localizedPrice ?? "Monthly";
+  const appleEulaUrl = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/";
 
   const savePct = useMemo(() => {
     const a = Number(annual?.priceNumber);
@@ -171,7 +172,7 @@ export function PaywallScreen({ navigation }: Props) {
                     </View>
                   ) : null}
                 </View>
-                <Text style={styles.planSub}>Best value • Billed annually</Text>
+                <Text style={styles.planSub}>WordCrack Premium Annual • 1 year</Text>
               </View>
             </View>
             <Text style={styles.planPrice}>{annualPrice}</Text>
@@ -193,7 +194,7 @@ export function PaywallScreen({ navigation }: Props) {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.planTitle}>Monthly</Text>
-                <Text style={styles.planSub}>Flexible • Cancel anytime</Text>
+                <Text style={styles.planSub}>WordCrack Premium Monthly • 1 month</Text>
               </View>
             </View>
             <Text style={styles.planPrice}>{monthlyPrice}</Text>
@@ -212,7 +213,10 @@ export function PaywallScreen({ navigation }: Props) {
           </Text>
 
           <View style={styles.legalRow}>
-            <Pressable accessibilityRole="button" onPress={() => navigation.navigate("Legal", { doc: "terms" })}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => void Linking.openURL(appleEulaUrl).catch(() => undefined)}
+            >
               <Text style={styles.legalLink}>Terms of Use (EULA)</Text>
             </Pressable>
             <Text style={styles.legalDot}>•</Text>

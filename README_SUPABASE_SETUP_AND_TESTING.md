@@ -52,8 +52,8 @@ Run this once:
 
 ```sql
 insert into public.products (id, type) values
-  ('wordcrack_premium_monthly','subscription'),
-  ('wordcrack_premium_annual','subscription')
+  ('com.wordcrack.premium.monthly','subscription'),
+  ('com.wordcrack.premium.annual','subscription')
 on conflict (id) do nothing;
 ```
 

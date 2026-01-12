@@ -1,6 +1,7 @@
 export const PRODUCTS = {
-  premium_monthly: "wordcrack_premium_monthly",
-  premium_annual: "wordcrack_premium_annual",
+  // Must match App Store Connect product IDs
+  premium_monthly: "com.wordcrack.premium.monthly",
+  premium_annual: "com.wordcrack.premium.annual",
 } as const;
 
 export type ProductId = (typeof PRODUCTS)[keyof typeof PRODUCTS];
