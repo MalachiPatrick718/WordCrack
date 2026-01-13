@@ -16,7 +16,7 @@ type ThemeContextValue = {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-const STORAGE_KEY = "wordcrack:themePreference";
+const STORAGE_KEY = "mindshift:themePreference";
 
 function schemeToMode(s: ColorSchemeName): ThemeMode {
   return s === "dark" ? "dark" : "light";

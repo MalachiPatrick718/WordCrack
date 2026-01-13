@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Image, Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { RootStackParamList } from "../AppRoot";
 import { useTheme } from "../theme/theme";
 import { getPracticeRemainingByVariant, getTodayPuzzleByVariant } from "../lib/api";
@@ -54,6 +55,7 @@ export function HomeScreen({ navigation }: Props) {
   const iap = useIap();
   const theme = useTheme();
   const { colors, shadows, borderRadius } = theme;
+  const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
   const [tick, setTick] = useState(0);
   const [solvedCipher, setSolvedCipher] = useState<boolean>(false);
@@ -172,7 +174,8 @@ export function HomeScreen({ navigation }: Props) {
         content: {
           flexGrow: 1,
           paddingTop: 15,
-          paddingBottom: 5,
+          // Extra bottom padding so the last button isn't blocked by Android system nav.
+          paddingBottom: Math.max(24, (insets?.bottom ?? 0) + 24),
           justifyContent: "flex-start",
         },
         logoWrap: {
@@ -345,7 +348,7 @@ export function HomeScreen({ navigation }: Props) {
           color: colors.text.primary,
         },
       }),
-    [colors, shadows, borderRadius],
+    [colors, shadows, borderRadius, insets?.bottom],
   );
 
   return (
@@ -355,7 +358,6 @@ export function HomeScreen({ navigation }: Props) {
       showsVerticalScrollIndicator={false}
       contentInsetAdjustmentBehavior="always"
     >
-      <View style={styles.inner}>
         {/* Centered logo */}
         <View style={styles.logoWrap}>
           <View style={styles.logoCard}>
@@ -415,6 +417,15 @@ export function HomeScreen({ navigation }: Props) {
             onPress={() => {
               void (async () => {
                 try {
+                  if (iap.premium) {
+                    Alert.alert("Practice Puzzles", "Choose a puzzle type:", [
+                      { text: "Cancel", style: "cancel" },
+                      { text: "Cipher Practice (Unlimited)", onPress: () => navigation.navigate("Puzzle", { mode: "practice", variant: "cipher" }) },
+                      { text: "Scramble Practice (Unlimited)", onPress: () => navigation.navigate("Puzzle", { mode: "practice", variant: "scramble" }) },
+                    ]);
+                    return;
+                  }
+
                   const [cipher, scramble] = await Promise.all([
                     getPracticeRemainingByVariant("cipher"),
                     getPracticeRemainingByVariant("scramble"),
@@ -448,7 +459,7 @@ export function HomeScreen({ navigation }: Props) {
           >
             <Text style={styles.practiceButtonText}>Practice Puzzles</Text>
             <Text style={styles.practiceButtonSubtext}>
-              5 per day (per puzzle type)
+              {iap.premium ? "Unlimited with Premium" : "5 per day (per puzzle type)"}
             </Text>
           </Pressable>
 
@@ -506,7 +517,6 @@ export function HomeScreen({ navigation }: Props) {
         <Text style={styles.settingsIcon}>⚙️</Text>
         <Text style={styles.settingsText}>Settings</Text>
       </Pressable>
-      </View>
     </ScrollView>
   );
 }

@@ -11,7 +11,7 @@ Privacy Policy
 
 Effective date: 2026-01-09
 
-WordCrack (“we”, “us”) provides the WordCrack mobile app.
+MindShiftz (“we”, “us”) provides the MindShiftz mobile app.
 
 Data we collect
 - Account data: email (if you upgrade from guest), username, avatar (optional)
@@ -28,7 +28,7 @@ Sharing
 - We do not sell personal data
 
 Contact
-- Support: support@wordcrack.app
+- Support: support@mindshift.app
 `;
 
 const TERMS = `
@@ -36,10 +36,10 @@ Terms of Service
 
 Effective date: 2026-01-09
 
-By using WordCrack you agree to these terms.
+By using MindShiftz you agree to these terms.
 
 Subscriptions / Purchases
-- Premium features may be sold via Apple App Store / Google Play
+- Premium features may be sold via the App Store
 - Purchases are subject to store terms and refund policies
 
 Acceptable use
@@ -49,7 +49,7 @@ Disclaimer
 - The app is provided “as is” without warranties
 
 Contact
-- Support: support@wordcrack.app
+- Support: support@mindshift.app
 `;
 
 export function LegalScreen({ route }: Props) {

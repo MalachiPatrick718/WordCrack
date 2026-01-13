@@ -57,7 +57,26 @@ function BootRouter() {
 
   useEffect(() => {
     // Keep the storage read in this file to avoid coupling boot logic to the onboarding UI.
-    getJson<boolean>("wordcrack:onboarded").then((v) => setOnboarded(v ?? false));
+    let mounted = true;
+    const timeout = setTimeout(() => {
+      if (!mounted) return;
+      // Safety: never block boot forever on a storage read.
+      setOnboarded(false);
+    }, 3000);
+    getJson<boolean>("mindshift:onboarded")
+      .then((v) => {
+        if (!mounted) return;
+        setOnboarded(v ?? false);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setOnboarded(false);
+      })
+      .finally(() => clearTimeout(timeout));
+    return () => {
+      mounted = false;
+      clearTimeout(timeout);
+    };
   }, []);
 
   useEffect(() => {
@@ -69,11 +88,16 @@ function BootRouter() {
       }
       try {
         if (mounted) setProfileLoading(true);
-        const { data } = await supabase
+        const req = supabase
           .from("profiles")
           .select("username,avatar_url")
           .eq("user_id", user.id)
           .maybeSingle();
+        // Safety: don't allow a network hang to keep the app on a spinner forever.
+        const { data } = await Promise.race([
+          req,
+          new Promise<{ data: null }>((resolve) => setTimeout(() => resolve({ data: null }), 6000)),
+        ]);
         if (!mounted) return;
         if (data) setProfile({ username: data.username, avatar_url: data.avatar_url ?? null });
       } catch {

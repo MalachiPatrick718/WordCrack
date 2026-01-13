@@ -1,4 +1,4 @@
-# WordCrack — In‑App Purchases (No RevenueCat)
+# MindShift — In‑App Purchases (No RevenueCat)
 
 This project uses **native StoreKit / Google Play Billing** in the app and stores **entitlements in Supabase** after **server-side validation**.
 
@@ -6,7 +6,7 @@ This project uses **native StoreKit / Google Play Billing** in the app and store
 
 These IDs are used by the app:
 
-- `com.wordcrack.premium.monthly` (subscription)
+- `com.wordcrack.premium.month` (subscription)
 - `com.wordcrack.premium.annual` (subscription)
 
 They live in `src/purchases/products.ts`.
@@ -27,7 +27,7 @@ Insert your products once:
 
 ```sql
 insert into public.products (id, type) values
-  ('com.wordcrack.premium.monthly','subscription'),
+  ('com.wordcrack.premium.month','subscription'),
   ('com.wordcrack.premium.annual','subscription')
 on conflict (id) do nothing;
 ```

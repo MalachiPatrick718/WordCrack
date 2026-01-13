@@ -44,6 +44,16 @@ Deno.serve(async (req) => {
     }
     const admin = supabaseAdmin();
     const today = getUtcDateString();
+    const now = new Date();
+
+    const { data: ent, error: entErr } = await admin
+      .from("entitlements")
+      .select("premium_until")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (entErr) return json({ error: entErr.message }, { status: 500, headers: corsHeaders });
+    const premium_until = (ent as any)?.premium_until ? new Date(String((ent as any).premium_until)) : null;
+    const is_premium = Boolean(premium_until && premium_until.getTime() > now.getTime());
 
     // Practice limit: 5 per UTC day *per puzzle type* (cipher vs scramble).
     const start = new Date(`${today}T00:00:00Z`);
@@ -58,14 +68,14 @@ Deno.serve(async (req) => {
     if (attemptsErr) return json({ error: attemptsErr.message }, { status: 500, headers: corsHeaders });
 
     const used = (attempts ?? []).filter((a: any) => String(a?.puzzles?.variant ?? "scramble") === variant).length;
-    const limit = 5;
-    const remaining = Math.max(0, limit - used);
+    const limit = is_premium ? 999999 : 5;
+    const remaining = is_premium ? 999999 : Math.max(0, limit - used);
 
     if (dryRun) {
-      return json({ ok: true, variant, limit, used, remaining }, { headers: corsHeaders });
+      return json({ ok: true, variant, is_premium, limit, used, remaining }, { headers: corsHeaders });
     }
 
-    if (used >= limit) {
+    if (!is_premium && used >= limit) {
       return json(
         { error: `Practice limit reached (${limit}/day for ${variant}).`, code: "PRACTICE_LIMIT", variant, limit, used },
         { status: 402, headers: corsHeaders },
@@ -106,7 +116,10 @@ Deno.serve(async (req) => {
 
     if (insErr) return json({ error: insErr.message }, { status: 500, headers: corsHeaders });
 
-    return json({ puzzle: inserted, variant, limit, used: used + 1, remaining: Math.max(0, limit - (used + 1)) }, { headers: corsHeaders });
+    return json(
+      { puzzle: inserted, variant, is_premium, limit, used: used + 1, remaining: is_premium ? 999999 : Math.max(0, limit - (used + 1)) },
+      { headers: corsHeaders },
+    );
   } catch (e) {
     if (e instanceof Response) return withCors(e);
     const msg = e instanceof Error ? e.message : "Unknown error";

@@ -69,7 +69,7 @@ function makeStyles(colors: any, shadows: any, borderRadius: any) {
       borderRadius: borderRadius.xl,
       padding: 32,
       width: "100%",
-      maxWidth: 340,
+      maxWidth: 420,
       alignItems: "center",
       ...shadows.large,
     },
@@ -99,6 +99,7 @@ function makeStyles(colors: any, shadows: any, borderRadius: any) {
     wordContainer: {
       alignItems: "center",
       marginBottom: 24,
+      paddingHorizontal: 8,
     },
     wordLabel: {
       fontSize: 14,
@@ -108,6 +109,7 @@ function makeStyles(colors: any, shadows: any, borderRadius: any) {
     wordTiles: {
       flexDirection: "row",
       gap: 6,
+      justifyContent: "center",
     },
     letterTile: {
       width: 52,

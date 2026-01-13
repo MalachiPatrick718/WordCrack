@@ -1,4 +1,4 @@
-# WordCrack — Supabase Setup (from scratch) + Testing Guide
+# MindShift — Supabase Setup (from scratch) + Testing Guide
 
 This guide assumes you’re starting with **no Supabase project yet**.
 
@@ -52,7 +52,7 @@ Run this once:
 
 ```sql
 insert into public.products (id, type) values
-  ('com.wordcrack.premium.monthly','subscription'),
+  ('com.wordcrack.premium.month','subscription'),
   ('com.wordcrack.premium.annual','subscription')
 on conflict (id) do nothing;
 ```
@@ -91,7 +91,7 @@ Setup (GitHub):
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
 2. The workflow runs daily at **03:00 UTC** (edit the cron in `.github/workflows/replenish_puzzle_bank.yml`).
-3. You can also run it manually: **Actions → Replenish WordCrack Puzzle Bank → Run workflow**.
+3. You can also run it manually: **Actions → Replenish MindShift Puzzle Bank → Run workflow**.
 
 #### Recommended (admin function)
 
@@ -174,7 +174,7 @@ If you see `401 Invalid JWT` from auth-required functions even when signed in, d
 supabase functions deploy <fn-name> --no-verify-jwt
 ```
 
-This repo includes `supabase/config.toml` that sets `verify_jwt = false` for all WordCrack functions, because we validate auth inside the function (via `requireUser()`).
+This repo includes `supabase/config.toml` that sets `verify_jwt = false` for all MindShift functions, because we validate auth inside the function (via `requireUser()`).
 
 ## 6) Configure Edge Function secrets
 
@@ -217,7 +217,7 @@ In **Supabase Dashboard**:
   - **Port**: `465` (TLS) or `587` (STARTTLS)
   - **Username**: `resend`
   - **Password**: your **Resend API key** (starts with `re_...`)  ← this is the "SMTP password"
-  - **Sender name**: `WordCrack`
+  - **Sender name**: `MindShift`
   - **Sender email**: an address from a **verified domain** in Resend (example: `no-reply@yourdomain.com`)
 
 In **Resend Dashboard**:
@@ -240,7 +240,7 @@ In **Supabase Dashboard**:
 **Magic Link** template (for returning users):
 
 ```html
-<h2>WordCrack login code</h2>
+<h2>MindShift login code</h2>
 <p>Enter this code in the app:</p>
 <p style="font-size: 24px; font-weight: 800; letter-spacing: 2px;">{{ .Token }}</p>
 ```
@@ -248,7 +248,7 @@ In **Supabase Dashboard**:
 **Confirm Signup** template (for first-time signups / email confirmation):
 
 ```html
-<h2>Confirm your WordCrack email</h2>
+<h2>Confirm your MindShift email</h2>
 <p>Enter this code in the app to finish signing in:</p>
 <p style="font-size: 24px; font-weight: 800; letter-spacing: 2px;">{{ .Token }}</p>
 ```
@@ -262,13 +262,13 @@ In **Supabase Dashboard → Authentication → Email Templates**, you can edit t
 Here’s a ready-to-paste **Confirm Signup** template (uses the 6‑digit OTP and includes the 🧩 emoji):
 
 - **Subject**:
-  - `🧩 WordCrack — Confirm your email`
+  - `🧩 MindShift — Confirm your email`
 
 - **Body (HTML)**:
 
 ```html
 <div style="font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color: #0f172a;">
-  <h2 style="margin: 0 0 8px 0;">🧩 Welcome to WordCrack!</h2>
+  <h2 style="margin: 0 0 8px 0;">🧩 Welcome to MindShift!</h2>
   <p style="margin: 0 0 16px 0; color: #334155;">
     Enter this code in the app to confirm your email and start cracking today's puzzle.
   </p>
@@ -360,7 +360,7 @@ cd "/Users/malachi/Word Crack/WordCrack"
 npm run start -- --dev-client
 ```
 
-Open the installed **WordCrack Dev** app on your phone(s). It should connect to Metro automatically on the same Wi‑Fi.
+Open the installed **MindShift Dev** app on your phone(s). It should connect to Metro automatically on the same Wi‑Fi.
 
 ### A) Quick “does the backend work?” test (no IAP)
 

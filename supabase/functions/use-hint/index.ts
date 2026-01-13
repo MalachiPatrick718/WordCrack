@@ -4,7 +4,7 @@ import { requireUser } from "../_shared/auth.ts";
 import { supabaseAdmin } from "../_shared/supabase.ts";
 import { json } from "../_shared/utils.ts";
 import { withCors } from "../_shared/http.ts";
-import { buildHintMessage, HINT_PENALTY_MS, type HintType } from "../_shared/wordcrack.ts";
+import { buildHintMessage, HINT_PENALTY_MS, type HintType } from "../_shared/mindshift.ts";
 import { assertUpperAlpha } from "../_shared/utils.ts";
 
 Deno.serve(async (req) => {

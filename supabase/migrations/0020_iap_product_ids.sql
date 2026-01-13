@@ -5,13 +5,13 @@ begin;
 
 -- Ensure new product IDs exist
 insert into public.products (id, type) values
-  ('com.wordcrack.premium.monthly','subscription'),
+  ('com.wordcrack.premium.month','subscription'),
   ('com.wordcrack.premium.annual','subscription')
 on conflict (id) do nothing;
 
 -- If you previously tested with placeholder IDs, map purchases over.
 update public.purchases
-set product_id = 'com.wordcrack.premium.monthly'
+set product_id = 'com.wordcrack.premium.month'
 where product_id = 'wordcrack_premium_monthly';
 
 update public.purchases

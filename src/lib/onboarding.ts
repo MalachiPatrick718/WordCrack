@@ -1,6 +1,6 @@
 import { getJson, setJson } from "./storage";
 
-const KEY = "wordcrack:onboarded";
+const KEY = "mindshift:onboarded";
 
 export async function hasOnboarded(): Promise<boolean> {
   const v = await getJson<boolean>(KEY);

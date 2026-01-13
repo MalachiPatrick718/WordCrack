@@ -153,9 +153,9 @@ const otpStyles = StyleSheet.create({
 const RESEND_COOLDOWN_MS = 30_000;
 
 // Test account credentials for development
-const TEST_EMAIL = "test@wordcrack.dev";
+const TEST_EMAIL = "test@mindshift.dev";
 const TEST_OTP = "123456";
-const TEST_PASSWORD = "WordCrackMaster2026!";
+const TEST_PASSWORD = "MindShiftMaster2026!";
 
 export function AuthScreen() {
   const { signInGuest, signInWithEmailOtp, verifyEmailOtp, signInWithPassword } = useAuth();

@@ -5,10 +5,75 @@ import { supabase } from "../lib/supabase";
 import { getJson, setJson } from "../lib/storage";
 import { PRODUCTS, type ProductId } from "./products";
 
+async function extractInvokeErrorMessage(err: any): Promise<string> {
+  let msg = String(err?.message ?? "Request failed");
+  const ctx = (err as any)?.context;
+  try {
+    // Supabase Functions errors often hide the JSON payload behind "non-2xx".
+    if (ctx && typeof ctx.json === "function" && !ctx.bodyUsed) {
+      const body = await ctx.json();
+      if (body?.error) return String(body.error);
+      if (body?.message) return String(body.message);
+      return JSON.stringify(body);
+    }
+    if (ctx?.body) {
+      const parsed = typeof ctx.body === "string" ? JSON.parse(ctx.body) : ctx.body;
+      if (parsed?.error) return String(parsed.error);
+      if (parsed?.message) return String(parsed.message);
+    }
+  } catch {
+    // ignore
+  }
+  return msg;
+}
+
+async function getIosReceiptBase64ForProduct(productId: string, purchase?: any): Promise<string> {
+  // 1) Prefer per-transaction receipt when present
+  const direct = String(purchase?.transactionReceipt ?? "");
+  if (direct) return direct;
+
+  // 2) Try available purchases (often includes transactionReceipt even when purchase event doesn't)
+  try {
+    const avail = await RNIap.getAvailablePurchases();
+    const match = (avail ?? []).find((p: any) => String(p?.productId ?? "") === productId);
+    const r = String((match as any)?.transactionReceipt ?? "");
+    if (r) return r;
+  } catch {
+    // ignore
+  }
+
+  // 3) Try purchase history (another source depending on StoreKit version)
+  try {
+    const hist = await (RNIap as any).getPurchaseHistory?.();
+    const match = (hist ?? []).find((p: any) => String(p?.productId ?? "") === productId);
+    const r = String((match as any)?.transactionReceipt ?? "");
+    if (r) return r;
+  } catch {
+    // ignore
+  }
+
+  // 4) Fall back to app receipt refresh
+  try {
+    const r = String(await (RNIap as any).getReceiptIOS?.());
+    if (r) return r;
+  } catch (e: any) {
+    const raw = String(e?.message ?? "");
+    // Surface a clearer message for the common case where the user dismisses the App Store prompt.
+    if (raw.toLowerCase().includes("request canceled") || raw.toLowerCase().includes("request cancelled")) {
+      throw new Error("App Store receipt refresh was canceled. Please complete the purchase prompt and try again, or use Restore Purchases.");
+    }
+    throw e;
+  }
+
+  throw new Error("Missing iOS receipt");
+}
+
 type IapState = {
   premium: boolean;
   premiumUntil: string | null;
   loading: boolean;
+  lastPurchaseError: string | null;
+  clearLastPurchaseError: () => void;
   premiumTestEnabled: boolean;
   setPremiumTestEnabled: (enabled: boolean) => Promise<void>;
   products: Partial<Record<ProductId, {
@@ -74,6 +139,7 @@ function extractNumericPrice(p: any): number | null {
 export function IapProvider(props: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [premiumUntil, setPremiumUntil] = useState<string | null>(null);
+  const [lastPurchaseError, setLastPurchaseError] = useState<string | null>(null);
   const [premiumTestEnabled, setPremiumTestEnabledState] = useState(false);
   const [products, setProducts] = useState<IapState["products"]>({});
   const validatingRef = useRef(false);
@@ -86,11 +152,33 @@ export function IapProvider(props: { children: React.ReactNode }) {
       } catch {
         // ignore
       }
-      const test = await getJson<boolean>("wordcrack:premiumTest");
+      const test = await getJson<boolean>("mindshift:premiumTest");
 
       // Best-effort: load localized pricing for paywall UI.
       try {
-        const subs = await (RNIap as any).getSubscriptions?.({ skus: [PRODUCTS.premium_monthly, PRODUCTS.premium_annual] });
+        const skus = [PRODUCTS.premium_monthly, PRODUCTS.premium_annual];
+        let subs: any[] | undefined;
+        // react-native-iap has had multiple signatures across versions/platforms.
+        // Try a couple to maximize compatibility.
+        try {
+          subs = await (RNIap as any).getSubscriptions?.({ skus });
+        } catch {
+          // ignore
+        }
+        if (!subs?.length) {
+          try {
+            subs = await (RNIap as any).getSubscriptions?.(skus);
+          } catch {
+            // ignore
+          }
+        }
+        if (!subs?.length) {
+          try {
+            subs = await (RNIap as any).getProducts?.({ skus });
+          } catch {
+            // ignore
+          }
+        }
         const map: IapState["products"] = {};
         for (const p of subs ?? []) {
           const id = p.productId as ProductId;
@@ -131,6 +219,7 @@ export function IapProvider(props: { children: React.ReactNode }) {
     const subPurchase = RNIap.purchaseUpdatedListener(async (purchase) => {
       if (validatingRef.current) return;
       validatingRef.current = true;
+      setLastPurchaseError(null);
       try {
         const product_id = purchase.productId as ProductId;
         if (!Object.values(PRODUCTS).includes(product_id)) return;
@@ -138,8 +227,7 @@ export function IapProvider(props: { children: React.ReactNode }) {
         if (Platform.OS === "ios") {
           // Prefer the per-transaction receipt when available to avoid calling getReceiptIOS()
           // (which can throw "Request Canceled" and returns the whole receipt history).
-          const receipt_base64 = (purchase as any)?.transactionReceipt ?? "";
-          if (!receipt_base64) throw new Error("Missing iOS transaction receipt");
+          const receipt_base64 = await getIosReceiptBase64ForProduct(product_id, purchase);
           const { error } = await supabase.functions.invoke("validate-purchase", {
             body: { platform: "ios", product_id, receipt_base64 },
           });
@@ -159,6 +247,10 @@ export function IapProvider(props: { children: React.ReactNode }) {
 
         const ent = await refreshEntitlement();
         setPremiumUntil(ent.premiumUntil);
+      } catch (e: any) {
+        const msg = await extractInvokeErrorMessage(e);
+        console.error("IAP validation failed:", msg, e);
+        setLastPurchaseError(msg);
       } finally {
         validatingRef.current = false;
       }
@@ -183,8 +275,7 @@ export function IapProvider(props: { children: React.ReactNode }) {
       for (const p of purchases ?? []) {
         const product_id = (p.productId ?? "") as ProductId;
         if (!Object.values(PRODUCTS).includes(product_id)) continue;
-        const receipt_base64 = (p as any)?.transactionReceipt ?? "";
-        if (!receipt_base64) continue;
+        const receipt_base64 = await getIosReceiptBase64ForProduct(product_id, p);
         const { error } = await supabase.functions.invoke("validate-purchase", {
           body: { platform: "ios", product_id, receipt_base64 },
         });
@@ -234,11 +325,11 @@ export function IapProvider(props: { children: React.ReactNode }) {
   const setPremiumTestEnabled = async (enabled: boolean) => {
     // Dev-only safety: never allow this to be turned on in production builds.
     if (!__DEV__) {
-      await setJson("wordcrack:premiumTest", false);
+      await setJson("mindshift:premiumTest", false);
       setPremiumTestEnabledState(false);
       return;
     }
-    await setJson("wordcrack:premiumTest", enabled);
+    await setJson("mindshift:premiumTest", enabled);
     setPremiumTestEnabledState(enabled);
   };
 
@@ -246,6 +337,8 @@ export function IapProvider(props: { children: React.ReactNode }) {
     return {
       loading,
       premiumUntil,
+      lastPurchaseError,
+      clearLastPurchaseError: () => setLastPurchaseError(null),
       premiumTestEnabled,
       setPremiumTestEnabled,
       products,
@@ -253,7 +346,7 @@ export function IapProvider(props: { children: React.ReactNode }) {
       restore,
       buy,
     };
-  }, [loading, premiumUntil, premiumTestEnabled, products]);
+  }, [loading, premiumUntil, lastPurchaseError, premiumTestEnabled, products]);
 
   return <Ctx.Provider value={value}>{props.children}</Ctx.Provider>;
 }

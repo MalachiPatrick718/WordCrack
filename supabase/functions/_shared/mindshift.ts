@@ -122,10 +122,13 @@ export function buildHintMessage(args: {
     };
   }
 
-  // reveal_theme
-  const theme = titleCaseTheme(args.themeHint ?? "");
-  if (!theme) return { message: "No theme hint available for this puzzle.", meta: { theme: null } };
-  return { message: `Theme hint: ${theme}`, meta: { theme } };
-}
+  if (args.hintType === "reveal_theme") {
+    const theme = titleCaseTheme(args.themeHint ?? "");
+    if (!theme) return { message: "No theme hint available.", meta: { theme: null } };
+    return { message: `Theme hint: ${theme}`, meta: { theme } };
+  }
 
+  // Exhaustive guard
+  return { message: "Unknown hint type." };
+}
 

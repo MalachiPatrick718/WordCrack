@@ -5,16 +5,21 @@ import { getMyStats } from "../lib/api";
 import { RootStackParamList } from "../AppRoot";
 import { useTheme } from "../theme/theme";
 import { useAuth } from "../state/AuthProvider";
+import { useIap } from "../purchases/IapProvider";
+import { UpgradeModal } from "../components/UpgradeModal";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Stats">;
 
 export function StatsScreen({ navigation }: Props) {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
+  const iap = useIap();
   const { colors, shadows, borderRadius } = useTheme();
   const styles = useMemo(() => makeStyles(colors, shadows, borderRadius), [colors, shadows, borderRadius]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<Awaited<ReturnType<typeof getMyStats>> | null>(null);
   const isAnonymous = Boolean((user as any)?.is_anonymous) || (user as any)?.app_metadata?.provider === "anonymous";
+  const isPremium = Boolean(iap.premium);
+  const [showUpgrade, setShowUpgrade] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -46,6 +51,27 @@ export function StatsScreen({ navigation }: Props) {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Your Stats</Text>
+      <UpgradeModal
+        visible={showUpgrade}
+        onClose={() => setShowUpgrade(false)}
+        emoji="📈"
+        title="Unlock more stats with Premium"
+        subtitle={
+          isAnonymous
+            ? "Subscribe with Guest Mode. Create an account later to sync Premium across devices."
+            : "Upgrade to MindShiftz Premium to unlock full stats."
+        }
+        bullets={[
+          "Best time + hints breakdown",
+          "Last 30 days average times",
+          "Unlimited practice puzzles",
+        ]}
+        primaryLabel="Upgrade to Premium"
+        onPrimary={() => {
+          navigation.navigate("Paywall");
+        }}
+        secondaryLabel="Not now"
+      />
 
       {loading && (
         <View style={styles.loadingContainer}>
@@ -66,19 +92,39 @@ export function StatsScreen({ navigation }: Props) {
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Cipher</Text>
             <View style={styles.statsGrid}>
-              <View style={[styles.statCard, { backgroundColor: colors.tiles[0] }]}>
+              <Pressable
+                accessibilityRole="button"
+                disabled={isPremium}
+                onPress={() => setShowUpgrade(true)}
+                style={[styles.statCard, { backgroundColor: colors.tiles[0], opacity: isPremium ? 1 : 0.8 }]}
+              >
                 <Text style={styles.statIcon}>⚡</Text>
-                <Text style={styles.statValue}>{fmtMs(stats.cipher.best_time_ms)}</Text>
+                <Text style={styles.statValue}>{isPremium ? fmtMs(stats.cipher.best_time_ms) : "🔒"}</Text>
                 <Text style={styles.statLabel}>Best Time</Text>
-              </View>
-              <View style={[styles.statCard, { backgroundColor: colors.tiles[1] }]}>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                disabled={isPremium}
+                onPress={() => setShowUpgrade(true)}
+                style={[styles.statCard, { backgroundColor: colors.tiles[1], opacity: isPremium ? 1 : 0.8 }]}
+              >
                 <Text style={styles.statIcon}>💡</Text>
-                <Text style={styles.statValue}>{stats.cipher.hint_usage_count}</Text>
+                <Text style={styles.statValue}>{isPremium ? String(stats.cipher.hint_usage_count) : "🔒"}</Text>
                 <Text style={styles.statLabel}>Hints Used</Text>
-              </View>
+              </Pressable>
             </View>
             <View style={styles.averagesCard}>
               <Text style={styles.cardTitle}>Average Times</Text>
+              <View style={styles.averageRow}>
+                <View style={styles.averageInfo}>
+                  <Text style={styles.averageLabel}>Last 3 Days</Text>
+                  <Text style={styles.averageValue}>{fmtMs(stats.cipher.avg_3d_ms)}</Text>
+                </View>
+                <View style={[styles.averageBadge, { backgroundColor: colors.tiles[3] }]}>
+                  <Text style={styles.averageBadgeText}>3D</Text>
+                </View>
+              </View>
+              <View style={styles.divider} />
               <View style={styles.averageRow}>
                 <View style={styles.averageInfo}>
                   <Text style={styles.averageLabel}>Last 7 Days</Text>
@@ -89,34 +135,59 @@ export function StatsScreen({ navigation }: Props) {
                 </View>
               </View>
               <View style={styles.divider} />
-              <View style={styles.averageRow}>
+              <Pressable
+                accessibilityRole="button"
+                disabled={isPremium}
+                onPress={() => setShowUpgrade(true)}
+                style={styles.averageRow}
+              >
                 <View style={styles.averageInfo}>
                   <Text style={styles.averageLabel}>Last 30 Days</Text>
-                  <Text style={styles.averageValue}>{fmtMs(stats.cipher.avg_30d_ms)}</Text>
+                  <Text style={styles.averageValue}>{isPremium ? fmtMs(stats.cipher.avg_30d_ms) : "🔒"}</Text>
                 </View>
                 <View style={[styles.averageBadge, { backgroundColor: colors.tiles[4] }]}>
                   <Text style={styles.averageBadgeText}>30D</Text>
                 </View>
-              </View>
+              </Pressable>
             </View>
           </View>
 
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Scramble</Text>
             <View style={styles.statsGrid}>
-              <View style={[styles.statCard, { backgroundColor: colors.tiles[2] }]}>
+              <Pressable
+                accessibilityRole="button"
+                disabled={isPremium}
+                onPress={() => setShowUpgrade(true)}
+                style={[styles.statCard, { backgroundColor: colors.tiles[2], opacity: isPremium ? 1 : 0.8 }]}
+              >
                 <Text style={styles.statIcon}>⚡</Text>
-                <Text style={styles.statValue}>{fmtMs(stats.scramble.best_time_ms)}</Text>
+                <Text style={styles.statValue}>{isPremium ? fmtMs(stats.scramble.best_time_ms) : "🔒"}</Text>
                 <Text style={styles.statLabel}>Best Time</Text>
-              </View>
-              <View style={[styles.statCard, { backgroundColor: colors.tiles[3] }]}>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                disabled={isPremium}
+                onPress={() => setShowUpgrade(true)}
+                style={[styles.statCard, { backgroundColor: colors.tiles[3], opacity: isPremium ? 1 : 0.8 }]}
+              >
                 <Text style={styles.statIcon}>💡</Text>
-                <Text style={styles.statValue}>{stats.scramble.hint_usage_count}</Text>
+                <Text style={styles.statValue}>{isPremium ? String(stats.scramble.hint_usage_count) : "🔒"}</Text>
                 <Text style={styles.statLabel}>Hints Used</Text>
-              </View>
+              </Pressable>
             </View>
             <View style={styles.averagesCard}>
               <Text style={styles.cardTitle}>Average Times</Text>
+              <View style={styles.averageRow}>
+                <View style={styles.averageInfo}>
+                  <Text style={styles.averageLabel}>Last 3 Days</Text>
+                  <Text style={styles.averageValue}>{fmtMs(stats.scramble.avg_3d_ms)}</Text>
+                </View>
+                <View style={[styles.averageBadge, { backgroundColor: colors.tiles[4] }]}>
+                  <Text style={styles.averageBadgeText}>3D</Text>
+                </View>
+              </View>
+              <View style={styles.divider} />
               <View style={styles.averageRow}>
                 <View style={styles.averageInfo}>
                   <Text style={styles.averageLabel}>Last 7 Days</Text>
@@ -127,19 +198,34 @@ export function StatsScreen({ navigation }: Props) {
                 </View>
               </View>
               <View style={styles.divider} />
-              <View style={styles.averageRow}>
+              <Pressable
+                accessibilityRole="button"
+                disabled={isPremium}
+                onPress={() => setShowUpgrade(true)}
+                style={styles.averageRow}
+              >
                 <View style={styles.averageInfo}>
                   <Text style={styles.averageLabel}>Last 30 Days</Text>
-                  <Text style={styles.averageValue}>{fmtMs(stats.scramble.avg_30d_ms)}</Text>
+                  <Text style={styles.averageValue}>{isPremium ? fmtMs(stats.scramble.avg_30d_ms) : "🔒"}</Text>
                 </View>
                 <View style={[styles.averageBadge, { backgroundColor: colors.tiles[1] }]}>
                   <Text style={styles.averageBadgeText}>30D</Text>
                 </View>
-              </View>
+              </Pressable>
             </View>
           </View>
 
-          {/* Premium gating temporarily disabled: show all stats for everyone. */}
+          {!isPremium ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setShowUpgrade(true)}
+              style={styles.lockCard}
+            >
+              <Text style={styles.lockTitle}>🔒 More stats available</Text>
+              <Text style={styles.lockText}>Upgrade to see Best Time, Hints, and Last 30 Days averages.</Text>
+              <Text style={styles.lockCta}>{isAnonymous ? "Create account" : "Upgrade to Premium"} →</Text>
+            </Pressable>
+          ) : null}
         </>
       )}
     </ScrollView>
@@ -156,6 +242,18 @@ function makeStyles(colors: any, shadows: any, borderRadius: any) {
     padding: 16,
     paddingBottom: 40,
   },
+  lockCard: {
+    backgroundColor: colors.background.card,
+    borderRadius: borderRadius.xl,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: "rgba(250, 204, 21, 0.35)",
+    ...shadows.small,
+    marginBottom: 16,
+  },
+  lockTitle: { fontWeight: "900", color: colors.text.primary, marginBottom: 6, fontSize: 16 },
+  lockText: { color: colors.text.secondary, lineHeight: 20 },
+  lockCta: { marginTop: 10, color: colors.primary.yellow, fontWeight: "900" },
   title: {
     fontSize: 24,
     fontWeight: "800",
@@ -196,7 +294,7 @@ function makeStyles(colors: any, shadows: any, borderRadius: any) {
   statsGrid: {
     flexDirection: "row",
     gap: 12,
-    marginBottom: 0,
+    marginBottom: 12,
   },
   sectionCard: {
     backgroundColor: colors.background.card,

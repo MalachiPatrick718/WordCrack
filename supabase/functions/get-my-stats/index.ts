@@ -58,6 +58,7 @@ Deno.serve(async (req) => {
     const today = getUtcDateString();
     // Best time = lowest SOLVE time (raw), puzzle-type specific (and overall).
     const best_time_ms = rowsAll.length ? Math.min(...rowsAll.map((r) => r.solve_time_ms)) : null;
+    const last3 = rowsAll.slice(0, 3).map((r) => r.solve_time_ms);
     const last7 = rowsAll.slice(0, 7).map((r) => r.solve_time_ms);
     const last30 = rowsAll.slice(0, 30).map((r) => r.solve_time_ms);
     const hints_used_count = rowsAll.reduce((sum, r) => sum + (Array.isArray(r.hints_used) ? r.hints_used.length : 0), 0);
@@ -85,11 +86,13 @@ Deno.serve(async (req) => {
     function statsForVariant(variant: "cipher" | "scramble") {
       const rows = rowsAll.filter((r) => r.variant === variant);
       const best = rows.length ? Math.min(...rows.map((r) => r.solve_time_ms)) : null;
+      const last3v = rows.slice(0, 3).map((r) => r.solve_time_ms);
       const last7v = rows.slice(0, 7).map((r) => r.solve_time_ms);
       const last30v = rows.slice(0, 30).map((r) => r.solve_time_ms);
       const hints = rows.reduce((sum, r) => sum + (Array.isArray(r.hints_used) ? r.hints_used.length : 0), 0);
       return {
         best_time_ms: best,
+        avg_3d_ms: avg(last3v),
         avg_7d_ms: avg(last7v),
         avg_30d_ms: avg(last30v),
         hint_usage_count: hints,
@@ -100,6 +103,7 @@ Deno.serve(async (req) => {
       {
         current_streak,
         best_time_ms,
+        avg_3d_ms: avg(last3),
         avg_7d_ms: avg(last7),
         avg_30d_ms: avg(last30),
         hint_usage_count: hints_used_count,

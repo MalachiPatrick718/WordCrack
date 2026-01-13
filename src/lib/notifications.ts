@@ -1,7 +1,7 @@
 import * as Notifications from "expo-notifications";
 import { getJson, setJson } from "./storage";
 
-const KEY = "wordcrack:dailyReminder";
+const KEY = "mindshift:dailyReminder";
 const ANDROID_CHANNEL_ID = "default";
 const HOURLY_SECONDS = 60 * 60;
 
@@ -71,7 +71,7 @@ export async function enableDailyReminder(hour = 9, minute = 0): Promise<void> {
     // eslint-disable-next-line no-await-in-loop
     const id = await Notifications.scheduleNotificationAsync({
       content: {
-        title: "New WordCrack Puzzle Available",
+        title: "New MindShiftz Puzzle Available",
         body: "A new puzzle is ready. Tap to play.",
       },
       trigger: {
@@ -103,7 +103,7 @@ export async function sendTestNewPuzzleNotification(opts?: { delaySeconds?: numb
   // Schedule a real OS notification so it can be seen even if the app is backgrounded.
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: "New WordCrack Puzzle Available",
+      title: "New MindShiftz Puzzle Available",
       body: "Test notification — this doesn’t change your countdown. New puzzles unlock at the next UTC hour.",
       data: { kind: "test_new_puzzle" },
     },

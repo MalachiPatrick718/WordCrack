@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../AppRoot";
 import { useIap } from "../purchases/IapProvider";
@@ -11,22 +11,43 @@ type Props = NativeStackScreenProps<RootStackParamList, "Paywall">;
 
 export function PaywallScreen({ navigation }: Props) {
   const iap = useIap();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const { colors, shadows, borderRadius } = useTheme();
-  const styles = useMemo(() => makeStyles(colors, shadows, borderRadius), [colors, shadows, borderRadius]);
+  const { width } = useWindowDimensions();
+  const isTabletLike = width >= 768;
+  const styles = useMemo(() => makeStyles(colors, shadows, borderRadius, isTabletLike), [colors, shadows, borderRadius, isTabletLike]);
   const [selected, setSelected] = useState<"annual" | "monthly">("annual");
   const isAnonymous = Boolean((user as any)?.is_anonymous) || (user as any)?.app_metadata?.provider === "anonymous";
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [busyText, setBusyText] = useState<string>("Opening payment…");
 
   const annual = iap.products[PRODUCTS.premium_annual];
   const monthly = iap.products[PRODUCTS.premium_monthly];
 
-  const annualPrice = annual?.localizedPrice ?? "Annual";
-  const monthlyPrice = monthly?.localizedPrice ?? "Monthly";
+  // If store pricing hasn't loaded yet, show your configured USD defaults so the UI isn't blank.
+  // Once IAP product info is available, we use localized store pricing automatically.
+  const monthlyPriceFallback = "$2.99";
+  const annualPriceFallback = "$29.99";
+  const monthlyPrice = monthly?.localizedPrice ?? monthlyPriceFallback;
+  const annualPrice = annual?.localizedPrice ?? annualPriceFallback;
   const appleEulaUrl = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/";
 
+  const currencyMark = useMemo(() => {
+    const fromAnnual = (annual?.localizedPrice ?? "").replace(/[0-9.,\s]/g, "").trim();
+    const fromMonthly = (monthly?.localizedPrice ?? "").replace(/[0-9.,\s]/g, "").trim();
+    return fromAnnual || fromMonthly || "$";
+  }, [annual?.localizedPrice, monthly?.localizedPrice]);
+
+  const annualPerMonth = useMemo(() => {
+    const a = Number.isFinite(Number(annual?.priceNumber)) ? Number(annual?.priceNumber) : 29.99;
+    if (!Number.isFinite(a) || a <= 0) return null;
+    return Math.round((a / 12) * 100) / 100;
+  }, [annual?.priceNumber]);
+
   const savePct = useMemo(() => {
-    const a = Number(annual?.priceNumber);
-    const m = Number(monthly?.priceNumber);
+    const a = Number.isFinite(Number(annual?.priceNumber)) ? Number(annual?.priceNumber) : 29.99;
+    const m = Number.isFinite(Number(monthly?.priceNumber)) ? Number(monthly?.priceNumber) : 2.99;
     if (!Number.isFinite(a) || !Number.isFinite(m) || a <= 0 || m <= 0) return null;
     const yearlyAtMonthly = m * 12;
     const pct = Math.round(((yearlyAtMonthly - a) / yearlyAtMonthly) * 100);
@@ -34,72 +55,162 @@ export function PaywallScreen({ navigation }: Props) {
   }, [annual?.priceNumber, monthly?.priceNumber]);
 
   const ctaProduct = selected === "annual" ? PRODUCTS.premium_annual : PRODUCTS.premium_monthly;
-  const ctaLabel = selected === "annual" ? "Start WordCrack Premium Annual" : "Start WordCrack Premium Monthly";
+  const ctaLabel = selected === "annual" ? "Start MindShiftz Premium Annual" : "Start MindShiftz Premium Monthly";
+  const [processing, setProcessing] = useState(false);
+
+  useEffect(() => {
+    if (!processing) return;
+    // Only show success once Premium is actually active.
+    if (iap.premium) {
+      setProcessing(false);
+      setBusy(false);
+      setShowSuccess(true);
+      return;
+    }
+    // If validation failed server-side, surface the actual error.
+    if (iap.lastPurchaseError) {
+      setProcessing(false);
+      setBusy(false);
+      Alert.alert(
+        "Purchase not activated",
+        `${iap.lastPurchaseError}\n\nIf you already completed the purchase, try “Restore Purchases”.`,
+      );
+      iap.clearLastPurchaseError();
+    }
+  }, [processing, iap.premium, iap.lastPurchaseError, navigation]);
 
   const buy = async () => {
     try {
-      if (isAnonymous) {
-        navigation.replace("UpgradeAccount", { postUpgradeTo: "Paywall" });
-        return;
-      }
       if (!user?.id) throw new Error("Not signed in");
+      iap.clearLastPurchaseError();
+      setBusyText("Opening App Store…");
+      setBusy(true);
+      setProcessing(true);
       await iap.buy(ctaProduct, user.id);
-      Alert.alert("Success", "WordCrack Premium is now active.");
-      navigation.goBack();
+      // iap.buy may resolve before server validation/premium refresh finishes.
+      setBusyText("Finalizing your Premium…");
     } catch (e: any) {
+      setProcessing(false);
+      setBusy(false);
       Alert.alert("Purchase failed", e?.message ?? "Unknown error");
     }
   };
 
   const restore = async () => {
     try {
-      if (isAnonymous) {
-        navigation.replace("UpgradeAccount", { postUpgradeTo: "Paywall" });
-        return;
-      }
+      if (!user?.id) throw new Error("Not signed in");
+      setBusyText("Restoring purchases…");
+      setBusy(true);
       await iap.restore();
-      Alert.alert("Restored", "Your purchases have been synced.");
-      navigation.goBack();
+      setBusy(false);
+      setShowSuccess(true);
     } catch (e: any) {
+      setBusy(false);
       Alert.alert("Restore failed", e?.message ?? "Unknown error");
     }
   };
 
   return (
     <View style={styles.container}>
+      {/* Busy overlay so the app never feels "frozen" while the store sheet is opening / validation runs */}
+      <Modal
+        visible={busy || processing}
+        transparent
+        animationType="fade"
+        onRequestClose={() => undefined}
+      >
+        <View style={styles.busyOverlay}>
+          <View style={styles.busyCard}>
+            <ActivityIndicator size="large" color={colors.primary.yellow} />
+            <Text style={styles.busyTitle}>{busyText}</Text>
+            <Text style={styles.busySub}>One moment…</Text>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Success modal */}
+      <Modal
+        visible={showSuccess}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSuccess(false)}
+      >
+        <Pressable style={styles.successOverlay} onPress={() => setShowSuccess(false)}>
+          <Pressable style={styles.successCard} onPress={() => undefined}>
+            <View style={styles.successEmojiCircle}>
+              <Text style={styles.successEmoji}>🎉</Text>
+            </View>
+            <Text style={styles.successTitle}>Premium unlocked!</Text>
+            <Text style={styles.successText}>You’re all set. Enjoy the full MindShiftz experience.</Text>
+
+            <View style={styles.successBullets}>
+              <Text style={styles.successBullet}>🧩 Unlimited practice puzzles</Text>
+              <Text style={styles.successBullet}>🏆 Full leaderboards</Text>
+              <Text style={styles.successBullet}>📈 Advanced stats</Text>
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setShowSuccess(false);
+                navigation.goBack();
+              }}
+              style={({ pressed }) => [styles.successButton, pressed && { opacity: 0.92 }]}
+            >
+              <Text style={styles.successButtonText}>Let’s go!</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <View style={styles.topBar}>
         <Pressable accessibilityRole="button" onPress={() => navigation.goBack()} style={styles.back}>
           <Text style={styles.backText}>‹</Text>
         </Pressable>
-        <Text style={styles.topTitle}>WordCrack Premium</Text>
+        <Text style={styles.topTitle}>MindShiftz Premium</Text>
         <View style={{ width: 36 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {isAnonymous ? (
-          <View style={styles.guestGate}>
-            <Text style={styles.guestGateTitle}>Create an account to subscribe</Text>
-            <Text style={styles.guestGateText}>
-              You’re currently playing as a guest. Create an account first, then you can start WordCrack Premium.
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => navigation.replace("UpgradeAccount", { postUpgradeTo: "Paywall" })}
-              style={({ pressed }) => [styles.guestGateButton, pressed && { opacity: 0.92 }]}
-            >
-              <Text style={styles.guestGateButtonText}>Create account</Text>
-            </Pressable>
-          </View>
-        ) : null}
-
+        <View style={styles.inner}>
         <View style={styles.hero}>
-          <Text style={styles.heroIcon}>⭐</Text>
-          <Text style={styles.heroTitle}>Upgrade to WordCrack Premium</Text>
-          <Text style={styles.heroSubtitle}>Unlock the full WordCrack experience</Text>
+          <View style={styles.heroGlowA} />
+          <View style={styles.heroGlowB} />
+          <View style={styles.heroPillRow}>
+            <View style={styles.heroPill}>
+              <Text style={styles.heroPillText}>⭐ MindShiftz Premium</Text>
+            </View>
+            {savePct ? (
+              <View style={styles.heroPillAlt}>
+                <Text style={styles.heroPillAltText}>Save {savePct}% yearly</Text>
+              </View>
+            ) : null}
+          </View>
+
+          <Text style={styles.heroTitle}>Upgrade to Premium</Text>
+          <Text style={styles.heroSubtitle}>Unlimited practice + full leaderboards + advanced stats</Text>
+
+          {isAnonymous ? (
+            <View style={styles.heroGuestRow}>
+              <Text style={styles.heroGuestText}>Playing as Guest</Text>
+              <Text style={styles.heroGuestTextMuted}>Subscribe now. Create an account later to sync across devices.</Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void signOut()}
+                style={({ pressed }) => [styles.heroGuestButton, pressed && { opacity: 0.92 }]}
+              >
+                <Text style={styles.heroGuestButtonText}>Create account (optional)</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.heroTrustRow}>
+              <Text style={styles.heroTrustText}>🔒 Secure checkout • Cancel anytime</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.featuresCard}>
-          <Text style={styles.sectionTitle}>Unlock with WordCrack Premium</Text>
+          <Text style={styles.sectionTitle}>Unlock with Premium</Text>
 
           <View style={styles.featureRow}>
             <Text style={styles.featureIcon}>🧩</Text>
@@ -129,79 +240,92 @@ export function PaywallScreen({ navigation }: Props) {
           <View style={styles.divider} />
 
           <View style={styles.featureRow}>
-            <Text style={styles.featureIcon}>🎨</Text>
+            <Text style={styles.featureIcon}>🤝</Text>
             <View style={styles.featureText}>
-              <Text style={styles.featureTitle}>Cosmetics</Text>
-              <Text style={styles.featureSubtitle}>Exclusive avatars & themes</Text>
+              <Text style={styles.featureTitle}>Friends Leaderboards</Text>
+              <Text style={styles.featureSubtitle}>Compare times with friends using invite codes</Text>
             </View>
           </View>
           <View style={styles.divider} />
 
           <View style={styles.featureRow}>
-            <Text style={styles.featureIcon}>🚫</Text>
+            <Text style={styles.featureIcon}>⭐</Text>
             <View style={styles.featureText}>
-              <Text style={styles.featureTitle}>Ad‑free</Text>
-              <Text style={styles.featureSubtitle}>No interruptions while cracking</Text>
+              <Text style={styles.featureTitle}>Premium Badge</Text>
+              <Text style={styles.featureSubtitle}>Show a Premium badge on leaderboards</Text>
             </View>
           </View>
         </View>
 
         <View style={styles.planSection}>
-          <Text style={styles.sectionTitle}>Choose Your Plan</Text>
+          <View style={styles.planHeader}>
+            <Text style={styles.sectionTitle}>Choose Your Plan</Text>
+            <View style={styles.cancelPill}>
+              <Text style={styles.cancelPillText}>Cancel anytime</Text>
+            </View>
+          </View>
 
-          <Pressable
-            accessibilityRole="button"
-            disabled={iap.loading}
-            onPress={() => setSelected("annual")}
-            style={({ pressed }) => [
-              styles.planCard,
-              selected === "annual" && styles.planCardSelected,
-              pressed && { opacity: 0.96 },
-            ]}
-          >
-            <View style={styles.planLeft}>
-              <View style={[styles.radio, selected === "annual" && styles.radioOn]}>
-                {selected === "annual" ? <Text style={styles.radioCheck}>✓</Text> : null}
-              </View>
-              <View style={{ flex: 1 }}>
-                <View style={styles.planTitleRow}>
-                  <Text style={styles.planTitle}>Annual</Text>
-                  {savePct ? (
-                    <View style={styles.savePill}>
-                      <Text style={styles.savePillText}>SAVE {savePct}%</Text>
-                    </View>
-                  ) : null}
+          <View style={styles.planRow}>
+            <Pressable
+              accessibilityRole="button"
+              disabled={iap.loading}
+              onPress={() => setSelected("monthly")}
+              style={({ pressed }) => [
+                styles.planCard,
+                selected === "monthly" && styles.planCardSelected,
+                pressed && { opacity: 0.96 },
+              ]}
+            >
+              <View style={styles.planRadioRow}>
+                <View style={[styles.radioOuter, selected === "monthly" && styles.radioOuterSelected]}>
+                  {selected === "monthly" ? <View style={styles.radioInner} /> : null}
                 </View>
-                <Text style={styles.planSub}>WordCrack Premium Annual • 1 year</Text>
+                <Text style={styles.planName}>Monthly</Text>
               </View>
-            </View>
-            <Text style={styles.planPrice}>{annualPrice}</Text>
-          </Pressable>
+              <Text style={styles.planBigPrice} numberOfLines={1} adjustsFontSizeToFit>{monthlyPrice}</Text>
+              <Text style={styles.planSmallText}>per month</Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              disabled={iap.loading}
+              onPress={() => setSelected("annual")}
+              style={({ pressed }) => [
+                styles.planCard,
+                selected === "annual" && styles.planCardSelected,
+                pressed && { opacity: 0.96 },
+              ]}
+            >
+              {savePct ? (
+                <View style={styles.savePillTop}>
+                  <Text style={styles.savePillTopText}>Save {savePct}%</Text>
+                </View>
+              ) : null}
+              <View style={styles.planRadioRow}>
+                <View style={[styles.radioOuter, selected === "annual" && styles.radioOuterSelected]}>
+                  {selected === "annual" ? <View style={styles.radioInner} /> : null}
+                </View>
+                <Text style={styles.planName}>Annual</Text>
+              </View>
+              <Text style={styles.planBigPrice} numberOfLines={1} adjustsFontSizeToFit>{annualPrice}</Text>
+              <Text style={styles.planSmallText}>per year</Text>
+              {annualPerMonth != null ? (
+                <Text style={styles.planAccent}>{currencyMark}{annualPerMonth.toFixed(2)}/month</Text>
+              ) : null}
+            </Pressable>
+          </View>
 
           <Pressable
             accessibilityRole="button"
-            disabled={iap.loading}
-            onPress={() => setSelected("monthly")}
+            disabled={iap.loading || processing}
+            onPress={buy}
             style={({ pressed }) => [
-              styles.planCard,
-              selected === "monthly" && styles.planCardSelected,
+              styles.cta,
+              (iap.loading || processing) && { opacity: 0.6 },
               pressed && { opacity: 0.96 },
             ]}
           >
-            <View style={styles.planLeft}>
-              <View style={[styles.radio, selected === "monthly" && styles.radioOn]}>
-                {selected === "monthly" ? <Text style={styles.radioCheck}>✓</Text> : null}
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.planTitle}>Monthly</Text>
-                <Text style={styles.planSub}>WordCrack Premium Monthly • 1 month</Text>
-              </View>
-            </View>
-            <Text style={styles.planPrice}>{monthlyPrice}</Text>
-          </Pressable>
-
-          <Pressable accessibilityRole="button" disabled={iap.loading} onPress={buy} style={({ pressed }) => [styles.cta, pressed && { opacity: 0.96 }]}>
-            <Text style={styles.ctaText}>{ctaLabel}</Text>
+            <Text style={styles.ctaText}>{processing ? "Starting Premium…" : ctaLabel}</Text>
           </Pressable>
 
           <Pressable accessibilityRole="button" disabled={iap.loading} onPress={restore} style={styles.restoreLink}>
@@ -209,7 +333,10 @@ export function PaywallScreen({ navigation }: Props) {
           </Pressable>
 
           <Text style={styles.finePrint}>
-            Payment will be charged to your App Store/Google Play account at confirmation. Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period.
+            Payment will be charged to your App Store account at confirmation. Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period.
+          </Text>
+          <Text style={styles.finePrint}>
+            You can manage or cancel your subscription in your App Store account settings.
           </Text>
 
           <View style={styles.legalRow}>
@@ -230,13 +357,13 @@ export function PaywallScreen({ navigation }: Props) {
           </View>
         </View>
 
-        {/* Removed: test premium toggle (we’ll reintroduce subscription gating when ready). */}
+        </View>
       </ScrollView>
     </View>
   );
 }
 
-const makeStyles = (colors: any, shadows: any, borderRadius: any) => StyleSheet.create({
+const makeStyles = (colors: any, shadows: any, borderRadius: any, isTabletLike: boolean) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background.main },
   topBar: {
     flexDirection: "row",
@@ -254,27 +381,13 @@ const makeStyles = (colors: any, shadows: any, borderRadius: any) => StyleSheet.
   },
   backText: { fontSize: 28, fontWeight: "900", color: colors.text.primary, marginTop: -2 },
   topTitle: { flex: 1, textAlign: "center", fontWeight: "900", color: colors.text.primary, fontSize: 16 },
-  content: { padding: 16, paddingBottom: 28, gap: 14 },
-
-  guestGate: {
-    backgroundColor: colors.background.card,
-    borderRadius: borderRadius.xl,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: "rgba(26, 115, 232, 0.25)",
-    ...shadows.small,
+  content: { padding: 16, paddingBottom: isTabletLike ? 40 : 28, gap: 14 },
+  inner: {
+    width: "100%",
+    maxWidth: isTabletLike ? 560 : 520,
+    alignSelf: "center",
+    gap: 14,
   },
-  guestGateTitle: { fontSize: 16, fontWeight: "900", color: colors.text.primary, marginBottom: 6 },
-  guestGateText: { color: colors.text.secondary, lineHeight: 20, marginBottom: 12 },
-  guestGateButton: {
-    backgroundColor: colors.primary.blue,
-    borderRadius: borderRadius.large,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    alignItems: "center",
-    ...shadows.small,
-  },
-  guestGateButtonText: { color: colors.text.light, fontWeight: "900", fontSize: 16 },
 
   hero: {
     backgroundColor: colors.primary.darkBlue,
@@ -283,10 +396,78 @@ const makeStyles = (colors: any, shadows: any, borderRadius: any) => StyleSheet.
     paddingHorizontal: 18,
     alignItems: "center",
     ...shadows.medium,
+    overflow: "hidden",
   },
-  heroIcon: { fontSize: 44, marginBottom: 6 },
-  heroTitle: { color: colors.text.light, fontSize: 30, fontWeight: "900", textAlign: "center" },
-  heroSubtitle: { color: colors.primary.lightBlue, marginTop: 6, fontSize: 16, textAlign: "center" },
+  heroGlowA: {
+    position: "absolute",
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: "rgba(250, 204, 21, 0.18)",
+    top: -120,
+    left: -120,
+  },
+  heroGlowB: {
+    position: "absolute",
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: "rgba(59, 130, 246, 0.20)",
+    bottom: -160,
+    right: -160,
+  },
+  heroPillRow: {
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "center",
+    marginBottom: 12,
+    flexWrap: "wrap",
+    justifyContent: "center",
+  },
+  heroPill: {
+    backgroundColor: "rgba(255,255,255,0.14)",
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+  },
+  heroPillText: { color: colors.text.light, fontWeight: "900" },
+  heroPillAlt: {
+    backgroundColor: "rgba(38, 222, 129, 0.92)",
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  heroPillAltText: { color: "#053B22", fontWeight: "900" },
+  heroTitle: { color: colors.text.light, fontSize: isTabletLike ? 30 : 34, fontWeight: "900", textAlign: "center" },
+  heroSubtitle: {
+    color: "rgba(255,255,255,0.82)",
+    marginTop: 8,
+    fontSize: 15,
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  heroTrustRow: {
+    marginTop: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: "rgba(0,0,0,0.22)",
+  },
+  heroTrustText: { color: "rgba(255,255,255,0.88)", fontWeight: "800" },
+  heroGuestRow: { marginTop: 14, alignItems: "center", gap: 8 },
+  heroGuestText: { color: colors.text.light, fontWeight: "900" },
+  heroGuestTextMuted: { color: "rgba(255,255,255,0.80)", fontWeight: "700" },
+  heroGuestButton: {
+    marginTop: 4,
+    backgroundColor: colors.primary.yellow,
+    borderRadius: borderRadius.large,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    ...shadows.small,
+  },
+  heroGuestButtonText: { color: colors.primary.darkBlue, fontWeight: "900", fontSize: 16 },
 
   featuresCard: {
     backgroundColor: colors.background.card,
@@ -308,55 +489,70 @@ const makeStyles = (colors: any, shadows: any, borderRadius: any) => StyleSheet.
     padding: 18,
     ...shadows.small,
   },
+  planHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  cancelPill: {
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: colors.ui.border,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  cancelPillText: { color: colors.text.secondary, fontWeight: "800", fontSize: 12 },
   planCard: {
+    flex: 1,
     borderWidth: 2,
     borderColor: colors.ui.border,
     borderRadius: borderRadius.large,
-    paddingVertical: 16,
-    paddingHorizontal: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-    backgroundColor: "#fff",
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    // Contrast correctly in both light/dark themes
+    backgroundColor: colors.background.main,
+    position: "relative",
   },
+  planRadioRow: { flexDirection: "row", gap: 10, alignItems: "center", justifyContent: "center" },
+  radioOuter: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: colors.ui.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  radioOuterSelected: { borderColor: colors.primary.yellow },
+  radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary.yellow },
   planCardSelected: {
-    borderColor: colors.primary.orange,
+    borderColor: colors.primary.yellow,
+    backgroundColor: colors.background.card,
     shadowColor: colors.ui.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 1,
     shadowRadius: 10,
     elevation: 4,
   },
-  planLeft: { flexDirection: "row", gap: 12, alignItems: "center", flex: 1, paddingRight: 10 },
-  radio: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: colors.ui.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  radioOn: {
-    borderColor: colors.primary.orange,
-    backgroundColor: colors.primary.orange,
-  },
-  radioCheck: { color: "#fff", fontWeight: "900", fontSize: 14, marginTop: -1 },
-  planTitleRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 2 },
-  planTitle: { fontSize: 20, fontWeight: "900", color: colors.text.primary },
-  savePill: {
-    backgroundColor: "rgba(38, 222, 129, 0.18)",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+  planRow: { flexDirection: "row", gap: 12 },
+  planName: { color: colors.text.secondary, fontWeight: "800", fontSize: 16, textAlign: "center" },
+  planBigPrice: { color: colors.text.primary, fontWeight: "900", fontSize: 34, textAlign: "center", marginTop: 6 },
+  planSmallText: { color: colors.text.muted, fontWeight: "700", fontSize: 14, textAlign: "center", marginTop: 2 },
+  planAccent: { color: "rgba(38, 222, 129, 0.95)", fontWeight: "900", fontSize: 16, textAlign: "center", marginTop: 10 },
+  savePillTop: {
+    position: "absolute",
+    top: -12,
+    left: 0,
+    right: 0,
+    alignSelf: "center",
+    marginHorizontal: 28,
+    backgroundColor: "rgba(38, 222, 129, 0.95)",
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     borderRadius: 999,
+    alignItems: "center",
   },
-  savePillText: { color: "#1e7f4a", fontWeight: "900", fontSize: 12, letterSpacing: 0.2 },
-  planSub: { color: colors.text.secondary },
-  planPrice: { fontSize: 22, fontWeight: "900", color: colors.text.primary },
+  savePillTopText: { color: "#053B22", fontWeight: "900", fontSize: 13 },
 
   cta: {
-    marginTop: 4,
+    marginTop: 14,
     backgroundColor: colors.primary.orange,
     borderRadius: borderRadius.large,
     paddingVertical: 16,
@@ -364,12 +560,86 @@ const makeStyles = (colors: any, shadows: any, borderRadius: any) => StyleSheet.
     ...shadows.small,
   },
   ctaText: { color: "#fff", fontWeight: "900", fontSize: 18 },
+  ctaSubText: { marginTop: 6, color: "rgba(255,255,255,0.82)", fontWeight: "700", fontSize: 12, textAlign: "center" },
   restoreLink: { alignItems: "center", paddingVertical: 10 },
   restoreLinkText: { color: colors.text.secondary, fontWeight: "700" },
   finePrint: { color: colors.text.muted, fontSize: 12, lineHeight: 18, textAlign: "center" },
   legalRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", marginTop: 10, flexWrap: "wrap", gap: 8 },
   legalLink: { color: colors.primary.blue, fontWeight: "800" },
   legalDot: { color: colors.text.muted },
+
+  busyOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 22,
+  },
+  busyCard: {
+    width: "100%",
+    maxWidth: 360,
+    backgroundColor: colors.background.card,
+    borderRadius: borderRadius.xl,
+    padding: 18,
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "rgba(250, 204, 21, 0.35)",
+    ...shadows.large,
+  },
+  busyTitle: { marginTop: 12, fontSize: 16, fontWeight: "900", color: colors.text.primary, textAlign: "center" },
+  busySub: { marginTop: 6, color: colors.text.secondary, fontWeight: "700" },
+
+  successOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 22,
+  },
+  successCard: {
+    width: "100%",
+    maxWidth: 380,
+    backgroundColor: colors.background.card,
+    borderRadius: borderRadius.xl,
+    padding: 20,
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "rgba(250, 204, 21, 0.35)",
+    ...shadows.large,
+  },
+  successEmojiCircle: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: "rgba(250, 204, 21, 0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+  },
+  successEmoji: { fontSize: 42 },
+  successTitle: { fontSize: 22, fontWeight: "900", color: colors.text.primary, textAlign: "center" },
+  successText: { marginTop: 8, color: colors.text.secondary, textAlign: "center", lineHeight: 20 },
+  successBullets: {
+    marginTop: 14,
+    width: "100%",
+    gap: 10,
+    padding: 14,
+    borderRadius: borderRadius.large,
+    backgroundColor: colors.background.main,
+    borderWidth: 1,
+    borderColor: colors.ui.border,
+  },
+  successBullet: { color: colors.text.secondary, fontWeight: "800" },
+  successButton: {
+    marginTop: 16,
+    width: "100%",
+    backgroundColor: colors.primary.yellow,
+    borderRadius: borderRadius.large,
+    paddingVertical: 14,
+    alignItems: "center",
+    ...shadows.small,
+  },
+  successButtonText: { color: colors.primary.darkBlue, fontWeight: "900", fontSize: 16 },
 
   devCard: {
     backgroundColor: colors.background.card,

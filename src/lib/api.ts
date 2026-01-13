@@ -229,11 +229,12 @@ export async function addFriendByInviteCode(invite_code: string): Promise<{ user
 export async function getMyStats(): Promise<{
   current_streak: number;
   best_time_ms: number | null;
+  avg_3d_ms: number | null;
   avg_7d_ms: number | null;
   avg_30d_ms: number | null;
   hint_usage_count: number;
-  cipher: { best_time_ms: number | null; avg_7d_ms: number | null; avg_30d_ms: number | null; hint_usage_count: number };
-  scramble: { best_time_ms: number | null; avg_7d_ms: number | null; avg_30d_ms: number | null; hint_usage_count: number };
+  cipher: { best_time_ms: number | null; avg_3d_ms: number | null; avg_7d_ms: number | null; avg_30d_ms: number | null; hint_usage_count: number };
+  scramble: { best_time_ms: number | null; avg_3d_ms: number | null; avg_7d_ms: number | null; avg_30d_ms: number | null; hint_usage_count: number };
 }> {
   const { data, error } = await supabase.functions.invoke("get-my-stats", { method: "GET" });
   if (error) throw error;

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "WordCrack",
+    "name": "MindShift",
     "slug": "WordCrack",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -15,6 +15,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.wordcrack.app",
+      "icon": "./assets/icon.png",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }

@@ -124,7 +124,7 @@ export function PuzzleScreen({ navigation, route }: Props) {
         setIdxs(si ?? Array.from({ length: wordLen }, () => 0));
         setThemeHint(puzzle.theme_hint ?? null);
         await setJson(
-          puzzleMode === "practice" ? `wordcrack:practicePuzzleCache:${variant}` : `wordcrack:todayPuzzleCache:${variant}`,
+          puzzleMode === "practice" ? `mindshift:practicePuzzleCache:${variant}` : `mindshift:todayPuzzleCache:${variant}`,
           puzzle,
         );
       } catch (e: any) {
@@ -490,7 +490,9 @@ export function PuzzleScreen({ navigation, route }: Props) {
           ]}
         >
           <Text style={styles.hintButtonIcon}>💡</Text>
-          <Text style={styles.hintButtonText}>Hint ({Math.max(0, remainingHints)})</Text>
+          <Text style={styles.hintButtonText}>
+            Hint ({Math.max(0, remainingHints)})
+          </Text>
         </Pressable>
 
         <Pressable

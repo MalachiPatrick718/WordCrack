@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="MindShift icon">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="70%">
+      <stop offset="0%" stop-color="#1E3D63"/>
+      <stop offset="55%" stop-color="#142338"/>
+      <stop offset="100%" stop-color="#0B1220"/>
+    </radialGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4A90D9"/>
+      <stop offset="60%" stop-color="#2D5A8A"/>
+      <stop offset="100%" stop-color="#45AAF2"/>
+    </linearGradient>
+    <linearGradient id="ms1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFE88A"/>
+      <stop offset="58%" stop-color="#FFD93D"/>
+      <stop offset="100%" stop-color="#F0C830"/>
+    </linearGradient>
+    <linearGradient id="ms2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#E9F7FF"/>
+      <stop offset="55%" stop-color="#74C0FC"/>
+      <stop offset="100%" stop-color="#45AAF2"/>
+    </linearGradient>
+    <filter id="shadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000" flood-opacity="0.45"/>
+    </filter>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.5" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+
+  <!-- Outer badge -->
+  <g filter="url(#shadow)">
+    <circle cx="512" cy="512" r="356" fill="#0F2A42" stroke="#2D5A8A" stroke-width="22"/>
+    <circle cx="512" cy="512" r="328" fill="none" stroke="url(#ring)" stroke-width="18" opacity="0.9"/>
+    <circle cx="512" cy="512" r="292" fill="#163A5B" opacity="0.35"/>
+  </g>
+
+  <!-- Motion arrows (shift) -->
+  <g transform="translate(512 512)" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.95">
+    <path d="M-250 -20 C-140 -170, 140 -170, 250 -20" stroke="#FFD93D" stroke-width="18"/>
+    <path d="M200 -6 l54 -16 -26 48" stroke="#FFD93D" stroke-width="18"/>
+    <path d="M250 40 C140 190, -140 190, -250 40" stroke="#74C0FC" stroke-width="18" opacity="0.9"/>
+    <path d="M-200 54 l-54 16 26 -48" stroke="#74C0FC" stroke-width="18" opacity="0.9"/>
+  </g>
+
+  <!-- MS monogram with chunky outline -->
+  <g font-family="Baloo 2, Nunito, Arial Black, system-ui, sans-serif" font-weight="900" text-anchor="middle">
+    <!-- extrude -->
+    <text x="512" y="630" font-size="340" fill="#091624" stroke="#091624" stroke-width="14">MS</text>
+    <!-- main -->
+    <text x="512" y="610" font-size="340" fill="url(#ms2)" stroke="#2D5A8A" stroke-width="34" paint-order="stroke">MS</text>
+    <!-- inner highlight -->
+    <text x="512" y="610" font-size="340" fill="none" stroke="#ffffff" stroke-width="8" opacity="0.55">MS</text>
+    <!-- accent: small warm highlight on left side -->
+    <path d="M360 380
+             C330 420, 320 470, 320 540
+             C320 650, 380 720, 470 744
+             C520 758, 560 754, 590 742
+             C520 724, 470 680, 450 610
+             C430 540, 430 470, 460 410
+             C430 400, 398 392, 360 380 Z"
+          fill="url(#ms1)" opacity="0.55"/>
+  </g>
+
+  <!-- Sparkles -->
+  <g filter="url(#glow)" opacity="0.9">
+    <path d="M780 322l10 26 26 10-26 10-10 26-10-26-26-10 26-10z" fill="#FFD93D"/>
+    <path d="M256 736l7 18 18 7-18 7-7 18-7-18-18-7 18-7z" fill="#74C0FC"/>
+  </g>
+</svg>

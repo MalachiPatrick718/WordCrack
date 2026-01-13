@@ -1,4 +1,4 @@
-// WordCrack Theme Colors - Matching the playful logo style
+// MindShift Theme Colors - Matching the playful logo style
 //
 // IMPORTANT:
 // - `lightColors` and `darkColors` are the palettes.

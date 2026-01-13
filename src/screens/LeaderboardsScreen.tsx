@@ -6,6 +6,7 @@ import { useAuth } from "../state/AuthProvider";
 import { useIap } from "../purchases/IapProvider";
 import { useTheme } from "../theme/theme";
 import { RootStackParamList } from "../AppRoot";
+import { UpgradeModal } from "../components/UpgradeModal";
 
 type Tab = "global" | "cipher" | "scramble" | "friends";
 type Props = NativeStackScreenProps<RootStackParamList, "Leaderboards">;
@@ -41,7 +42,7 @@ const TAB_LABELS: Record<Tab, { emoji: string; label: string }> = {
 };
 
 export function LeaderboardsScreen({ navigation, route }: Props) {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const iap = useIap();
   const { colors, shadows, borderRadius } = useTheme();
   const styles = useMemo(() => makeStyles(colors, shadows, borderRadius), [colors, shadows, borderRadius]);
@@ -56,7 +57,11 @@ export function LeaderboardsScreen({ navigation, route }: Props) {
   const [showPicker, setShowPicker] = useState(false);
 
   const isAnonymous = Boolean((user as any)?.is_anonymous) || (user as any)?.app_metadata?.provider === "anonymous";
-  const canUseFriends = !isAnonymous;
+  const isPremium = Boolean(iap.premium);
+  const canUseFriends = !isAnonymous && isPremium;
+  const isFreeUser = !isPremium;
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const [upgradeKind, setUpgradeKind] = useState<"friends" | "full_leaderboard">("full_leaderboard");
 
   const load = async (t: Tab) => {
     try {
@@ -91,9 +96,8 @@ export function LeaderboardsScreen({ navigation, route }: Props) {
 
   const selectTab = (t: Tab) => {
     if (t === "friends" && !canUseFriends) {
-      Alert.alert("Create an account", "Friends leaderboards require an account (Guest Mode can’t add friends yet).", [
-        { text: "OK" },
-      ]);
+      setUpgradeKind("friends");
+      setShowUpgrade(true);
       return;
     }
     setTab(t);
@@ -102,6 +106,37 @@ export function LeaderboardsScreen({ navigation, route }: Props) {
 
   return (
     <View style={styles.container}>
+      <UpgradeModal
+        visible={showUpgrade}
+        onClose={() => setShowUpgrade(false)}
+        emoji={upgradeKind === "friends" ? "🤝" : "🏆"}
+        title={
+          upgradeKind === "friends"
+            ? "Friends Leaderboards are Premium"
+            : "Unlock the full leaderboard"
+        }
+        subtitle={
+          upgradeKind === "friends"
+            ? "Friends leaderboards require Premium + an account so you can add friends."
+            : (isAnonymous
+              ? "Subscribe with Guest Mode. Create an account later to sync Premium across devices."
+              : "Upgrade to MindShiftz Premium to unlock this feature.")
+        }
+        bullets={[
+          "Unlimited practice puzzles",
+          "Friends leaderboards",
+          "Full leaderboards + advanced stats",
+        ]}
+        primaryLabel={upgradeKind === "friends" ? "Create account" : "Upgrade to Premium"}
+        onPrimary={() => {
+          if (upgradeKind === "friends") {
+            void signOut();
+            return;
+          }
+          navigation.navigate("Paywall");
+        }}
+        secondaryLabel="Not now"
+      />
       {/* Dropdown Selector */}
       <Pressable
         accessibilityRole="button"
@@ -130,6 +165,7 @@ export function LeaderboardsScreen({ navigation, route }: Props) {
             {(["global", "cipher", "scramble", "friends"] as Tab[]).map((t) => {
               const isDisabled = t === "friends" && !canUseFriends;
               const isSelected = t === tab;
+              const friendsSuffix = isAnonymous ? " (🔒 Create account + Premium)" : " (🔒 Premium)";
               return (
                 <Pressable
                   key={t}
@@ -148,7 +184,7 @@ export function LeaderboardsScreen({ navigation, route }: Props) {
                     isDisabled && styles.pickerOptionTextDisabled,
                   ]}>
                     {TAB_LABELS[t].emoji} {TAB_LABELS[t].label}
-                    {isDisabled ? " (Account required)" : ""}
+                    {t === "friends" && isDisabled ? friendsSuffix : ""}
                   </Text>
                   {isSelected && <Text style={styles.checkmark}>✓</Text>}
                 </Pressable>
@@ -167,9 +203,7 @@ export function LeaderboardsScreen({ navigation, route }: Props) {
             <Pressable
               accessibilityRole="button"
               onPress={() => {
-                // Route depends on how you want to upgrade: anonymous users go through UpgradeAccount first.
-                // (This keeps their current guest session and lets them convert it.)
-                navigation.navigate("UpgradeAccount", { postUpgradeTo: "Home" });
+                void signOut();
               }}
               style={({ pressed }) => [styles.guestButton, pressed && { opacity: 0.9 }]}
             >
@@ -210,6 +244,26 @@ export function LeaderboardsScreen({ navigation, route }: Props) {
               ]}
             >
               <Text style={styles.addButtonText}>Add Friend</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {/* Friends locked view */}
+        {tab === "friends" && !canUseFriends && (
+          <View style={styles.guestCard}>
+            <Text style={styles.guestTitle}>🔒 Premium Feature</Text>
+            <Text style={styles.guestText}>
+              Friends leaderboards are available with MindShiftz Premium.
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setUpgradeKind("friends");
+                setShowUpgrade(true);
+              }}
+              style={({ pressed }) => [styles.guestButton, pressed && { opacity: 0.9 }]}
+            >
+              <Text style={styles.guestButtonText}>{isAnonymous ? "Create Account" : "Upgrade to Premium"}</Text>
             </Pressable>
           </View>
         )}
@@ -261,7 +315,7 @@ export function LeaderboardsScreen({ navigation, route }: Props) {
 
         {/* Current puzzle entries (Cipher / Scramble) */}
         {(tab === "cipher" || tab === "scramble") &&
-          (dailyEntries ?? []).map((e, i) => (
+          (dailyEntries ?? []).slice(0, isFreeUser ? 5 : 10_000).map((e, i) => (
             <View
               key={`${e.user_id}:${i}`}
               style={[
@@ -306,6 +360,23 @@ export function LeaderboardsScreen({ navigation, route }: Props) {
             </View>
           ))}
 
+        {(tab === "cipher" || tab === "scramble") && isFreeUser && (dailyEntries?.length ?? 0) > 5 ? (
+          <View style={styles.guestCard}>
+            <Text style={styles.guestTitle}>🏆 See the full leaderboard</Text>
+            <Text style={styles.guestText}>Upgrade to MindShiftz Premium to unlock the full list.</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setUpgradeKind("full_leaderboard");
+                setShowUpgrade(true);
+              }}
+              style={({ pressed }) => [styles.guestButton, pressed && { opacity: 0.9 }]}
+            >
+              <Text style={styles.guestButtonText}>{isAnonymous ? "Create Account" : "Upgrade to Premium"}</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         {/* Global Rankings (average across daily puzzles) */}
         {tab === "global" ? (
           <View style={styles.globalRankingsSection}>
@@ -323,7 +394,7 @@ export function LeaderboardsScreen({ navigation, route }: Props) {
               </View>
             ) : null}
 
-            {(globalRankings ?? []).map((e, i) => {
+            {(globalRankings ?? []).slice(0, isFreeUser ? 5 : 10_000).map((e, i) => {
               const isMe = user?.id === e.user_id;
               return (
                 <View key={`${e.user_id}:${i}`} style={[styles.rankRow, isMe && styles.rankRowMe]}>
@@ -357,10 +428,25 @@ export function LeaderboardsScreen({ navigation, route }: Props) {
                 </View>
               );
             })}
+
+            {isFreeUser && (globalRankings?.length ?? 0) > 5 ? (
+              <View style={[styles.guestCard, { marginTop: 14 }]}>
+                <Text style={styles.guestTitle}>🔒 Full Global Rankings</Text>
+                <Text style={styles.guestText}>Upgrade to MindShiftz Premium to view the full rankings list.</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    setUpgradeKind("full_leaderboard");
+                    setShowUpgrade(true);
+                  }}
+                  style={({ pressed }) => [styles.guestButton, pressed && { opacity: 0.9 }]}
+                >
+                  <Text style={styles.guestButtonText}>{isAnonymous ? "Create Account" : "Upgrade to Premium"}</Text>
+                </Pressable>
+              </View>
+            ) : null}
           </View>
         ) : null}
-
-        {/* Premium gating temporarily disabled: show full leaderboards for everyone. */}
 
         {/* Friends entries (single list) */}
         {tab === "friends" &&

@@ -37,7 +37,7 @@ export function ResultsScreen({ navigation, route }: Props) {
   const share = async () => {
     try {
       const msg =
-        `🔓 WordCrack — Daily Puzzle\n\n` +
+        `🔓 MindShiftz — Daily Puzzle\n\n` +
         `⏱️ Raw: ${fmtMs(solve_time_ms)}\n` +
         `⚠️ Penalties: +${Math.floor(penalty_ms / 1000)}s (${hints_used_count} hints)\n` +
         `🏆 Final: ${fmtMs(final_time_ms)}\n` +
@@ -150,7 +150,7 @@ export function ResultsScreen({ navigation, route }: Props) {
                 if (!granted) {
                   Alert.alert(
                     "Enable notifications",
-                    "To turn on hourly reminders, allow notifications for WordCrack. If you previously denied it, enable it in system settings.",
+                    "To turn on hourly reminders, allow notifications for MindShiftz. If you previously denied it, enable it in system settings.",
                     [
                       { text: "Not now", style: "cancel" },
                       { text: "Open Settings", onPress: () => void Linking.openSettings().catch(() => undefined) },

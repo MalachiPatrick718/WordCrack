@@ -27,19 +27,33 @@ export function AuthProvider(props: { children: React.ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getSession().then(({ data }) => {
+    // Safety: avoid an indefinite spinner if getSession hangs (seen on some devices after relaunch).
+    const timeout = setTimeout(() => {
       if (!mounted) return;
-      const next = data.session ?? null;
-      setSession(next);
-      if (next?.access_token) supabase.functions.setAuth(next.access_token);
       setInitializing(false);
-    });
+    }, 8000);
+
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (!mounted) return;
+        const next = data.session ?? null;
+        setSession(next);
+        if (next?.access_token) supabase.functions.setAuth(next.access_token);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!mounted) return;
+        clearTimeout(timeout);
+        setInitializing(false);
+      });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       if (nextSession?.access_token) supabase.functions.setAuth(nextSession.access_token);
     });
     return () => {
       mounted = false;
+      clearTimeout(timeout);
       sub.subscription.unsubscribe();
     };
   }, []);
