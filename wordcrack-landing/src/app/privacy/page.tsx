@@ -13,7 +13,7 @@ export default function PrivacyPage() {
           <section className="rounded-2xl border border-border bg-card p-6">
             <h2 className="font-extrabold text-white">Overview</h2>
             <p className="mt-2">
-              This Privacy Policy explains how WordCrack collects, uses, and shares information when you use the WordCrack mobile
+              This Privacy Policy explains how MindShift collects, uses, and shares information when you use the MindShift mobile
               app.
             </p>
           </section>
@@ -87,7 +87,7 @@ export default function PrivacyPage() {
           <section className="rounded-2xl border border-border bg-card p-6">
             <h2 className="font-extrabold text-white">Contact</h2>
             <p className="mt-2">
-              Questions or requests? Email <span className="font-semibold">support@wordcrack.app</span>.
+              Questions or requests? Email <span className="font-semibold">support@mindshift.app</span>.
             </p>
           </section>
         </div>

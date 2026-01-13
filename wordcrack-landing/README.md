@@ -1,11 +1,11 @@
-# WordCrack Landing (Static)
+# MindShift Landing (Static)
 
-Static marketing site for WordCrack (no backend).
+Static marketing site for MindShift (no backend).
 
 ## Local dev
 
 ```bash
-cd "wordcrack-landing"
+cd "mindshift-landing"
 npm install
 npm run dev
 ```
@@ -13,12 +13,12 @@ npm run dev
 ## Static export build
 
 ```bash
-cd "wordcrack-landing"
+cd "mindshift-landing"
 npm install
 npm run build
 ```
 
-The static site is exported to `wordcrack-landing/out/`.
+The static site is exported to `mindshift-landing/out/`.
 
 ## Deploy
 

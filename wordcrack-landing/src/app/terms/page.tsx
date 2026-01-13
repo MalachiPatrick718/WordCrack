@@ -8,7 +8,7 @@ export default function TermsPage() {
       <main className="mx-auto max-w-3xl px-6 py-10">
         <h1 className="text-3xl font-black">Terms of Service</h1>
         <p className="mt-4 text-white/70 leading-relaxed">
-          This is a placeholder Terms of Service for WordCrack. Replace this content before production release.
+          This is a placeholder Terms of Service for MindShift. Replace this content before production release.
         </p>
 
         <div className="mt-8 space-y-6 text-white/75 leading-relaxed">
@@ -31,7 +31,7 @@ export default function TermsPage() {
           <section className="rounded-2xl border border-border bg-card p-6">
             <h2 className="font-extrabold text-white">Contact</h2>
             <p className="mt-2">
-              Email support: <span className="font-semibold">support@wordcrack.app</span>
+              Email support: <span className="font-semibold">support@mindshift.app</span>
             </p>
           </section>
         </div>

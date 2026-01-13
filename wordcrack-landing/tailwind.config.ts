@@ -5,7 +5,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Match WordCrack app theme (`WordCrack/src/theme/colors.ts`)
+        // Match MindShift app theme (`WordCrack/src/theme/colors.ts`)
         ink: "#0B1220",
         navy: "#2D5A8A",
         blue: "#4A90D9",

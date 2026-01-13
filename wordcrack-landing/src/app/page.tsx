@@ -46,7 +46,7 @@ export default function HomePage() {
               </h1>
 
               <p className="mt-4 text-white/75 text-lg leading-relaxed">
-                WordCrack is a fast, logic‑driven word game with two modes: a classic Cipher puzzle and a Scramble puzzle.
+                MindShift is a fast, logic‑driven word game with two modes: a classic Cipher puzzle and a Scramble puzzle.
                 Everyone gets the same puzzles for the current hour—solve quicker to climb the leaderboard. No account required: use Guest Mode to let friends try it instantly.
               </p>
 
@@ -63,9 +63,9 @@ export default function HomePage() {
             <div className="relative">
               <div className="rounded-3xl border border-border bg-card p-6 shadow-glow">
                 <div className="flex items-center gap-3">
-                  <Image src={`${basePath}/logo.svg`} alt="WordCrack" width={44} height={44} priority />
+                  <Image src={`${basePath}/logo.svg`} alt="MindShift" width={44} height={44} priority />
                   <div>
-                    <div className="font-extrabold">WordCrack</div>
+                    <div className="font-extrabold">MindShift</div>
                     <div className="text-xs text-white/60">Scrambled word • 5 columns • penalties for hints</div>
                   </div>
                 </div>
@@ -111,7 +111,7 @@ export default function HomePage() {
               },
               {
                 title: "Cipher Puzzle (classic)",
-                body: "Prefer the original WordCrack feel? Play Cipher mode, where letters are shifted and you crack the pattern under pressure.",
+                body: "Prefer the original MindShift feel? Play Cipher mode, where letters are shifted and you crack the pattern under pressure.",
               },
               {
                 title: "5 Columns",
@@ -144,7 +144,7 @@ export default function HomePage() {
 
         <section className="mt-16 rounded-3xl border border-border bg-card p-8">
           <div className="text-2xl font-black">Ready for the next puzzle?</div>
-          <div className="mt-2 text-white/70">Download WordCrack and compete on the hourly leaderboard.</div>
+          <div className="mt-2 text-white/70">Download MindShift and compete on the hourly leaderboard.</div>
           <div className="mt-6 flex flex-col sm:flex-row gap-3">
             <StoreButton kind="ios" href="#" />
             <StoreButton kind="android" href="#" />

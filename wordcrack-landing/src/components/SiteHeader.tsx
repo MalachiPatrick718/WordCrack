@@ -6,8 +6,8 @@ export function SiteHeader() {
   return (
     <header className="mx-auto max-w-6xl px-6 py-6 flex items-center justify-between">
       <Link href="/" className="flex items-center gap-3">
-        <Image src={`${basePath}/logo.svg`} alt="WordCrack" width={36} height={36} priority />
-        <span className="font-extrabold tracking-tight text-lg">WordCrack</span>
+        <Image src={`${basePath}/logo.svg`} alt="MindShift" width={36} height={36} priority />
+        <span className="font-extrabold tracking-tight text-lg">MindShift</span>
       </Link>
       <nav className="flex items-center gap-5 text-sm">
         <Link className="text-white/80 hover:text-white" href="/support">
