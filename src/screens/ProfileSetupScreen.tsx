@@ -119,6 +119,7 @@ export function ProfileSetupScreen({ navigation, route }: Props) {
   const scrollRef = useRef<ScrollView>(null);
   const stateInputRef = useRef<TextInput>(null);
   const [username, setUsername] = useState(route.params?.initialUsername ?? "");
+  const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken">("idle");
   const [selectedAvatarUrl, setSelectedAvatarUrl] = useState<string>(route.params?.initialAvatarUrl ?? avatarUrlForSeed(AVATAR_SEEDS[0]!));
   const [stateCode, setStateCode] = useState("");
   const [stateQuery, setStateQuery] = useState("");
@@ -180,11 +181,49 @@ export function ProfileSetupScreen({ navigation, route }: Props) {
     };
   }, [user]);
 
+  // Live username availability check (use public view so we can check other users).
+  useEffect(() => {
+    let cancelled = false;
+    if (!user) return;
+    const u = username.trim().toLowerCase();
+    if (u.length < 3 || !/^[a-z0-9_]+$/.test(u)) {
+      setUsernameStatus("idle");
+      return;
+    }
+    setUsernameStatus("checking");
+    const t = setTimeout(() => {
+      (async () => {
+        try {
+          const { data, error } = await supabase
+            .from("profiles_public")
+            .select("user_id")
+            .eq("username", u)
+            .neq("user_id", user.id)
+            .limit(1);
+          if (cancelled) return;
+          if (error) {
+            setUsernameStatus("idle");
+            return;
+          }
+          setUsernameStatus((data?.length ?? 0) > 0 ? "taken" : "available");
+        } catch {
+          if (cancelled) return;
+          setUsernameStatus("idle");
+        }
+      })();
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [username, user]);
+
   const save = async () => {
     if (!user) return;
     const u = username.trim().toLowerCase();
     if (u.length < 3) return Alert.alert("Username too short", "Use at least 3 characters.");
     if (!/^[a-z0-9_]+$/.test(u)) return Alert.alert("Invalid username", "Use only letters, numbers, and underscores.");
+    if (usernameStatus === "taken") return Alert.alert("Username taken", "Try a different username.");
     const picked = stateCode.trim() ? stateCode.trim().toUpperCase() : canonicalizeState(stateQuery) ?? null;
     if (picked == null && stateQuery.trim()) {
       return Alert.alert("Pick a real state", "Select a state from the suggestions (or leave it blank).");
@@ -354,6 +393,15 @@ export function ProfileSetupScreen({ navigation, route }: Props) {
             style={styles.input}
             returnKeyType="next"
           />
+          <Text style={[styles.hintText, usernameStatus === "taken" && { color: colors.primary.red }]}>
+            {usernameStatus === "checking"
+              ? "Checking availability…"
+              : usernameStatus === "taken"
+                ? "That username is taken."
+                : usernameStatus === "available"
+                  ? "Username available."
+                  : "Use 3+ chars: letters, numbers, underscore."}
+          </Text>
 
           <Text style={styles.label}>State (optional)</Text>
           <TextInput

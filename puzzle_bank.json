@@ -17,7 +17,7 @@
   },
   {
     "target_word": "BRICK",
-    "theme_hint": "Building block"
+    "theme_hint": "Building"
   },
   {
     "target_word": "MERCY",
@@ -25,7 +25,7 @@
   },
   {
     "target_word": "VAPOR",
-    "theme_hint": "Gas form"
+    "theme_hint": "Gas"
   },
   {
     "target_word": "SPICE",
@@ -97,7 +97,7 @@
   },
   {
     "target_word": "CLEAN",
-    "theme_hint": "Not dirty"
+    "theme_hint": "Sparkle"
   },
   {
     "target_word": "CHECK",
@@ -105,7 +105,7 @@
   },
   {
     "target_word": "STORE",
-    "theme_hint": "Shop or keep"
+    "theme_hint": "Purchase"
   },
   {
     "target_word": "VISIT",
@@ -113,23 +113,23 @@
   },
   {
     "target_word": "SPEED",
-    "theme_hint": "How fast"
+    "theme_hint": "Time"
   },
   {
     "target_word": "BROKE",
-    "theme_hint": "Not working"
+    "theme_hint": "Disjoint"
   },
   {
     "target_word": "GUIDE",
-    "theme_hint": "Show the way"
+    "theme_hint": "Lead"
   },
   {
     "target_word": "AGAIN",
-    "theme_hint": "Once more"
+    "theme_hint": "Repeat"
   },
   {
     "target_word": "ARRAY",
-    "theme_hint": "Ordered list"
+    "theme_hint": "List"
   },
   {
     "target_word": "HARDY",
@@ -153,7 +153,7 @@
   },
   {
     "target_word": "MOUTH",
-    "theme_hint": "Face part"
+    "theme_hint": "Face"
   },
   {
     "target_word": "STRIP",

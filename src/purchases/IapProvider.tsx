@@ -76,6 +76,12 @@ type IapState = {
   clearLastPurchaseError: () => void;
   premiumTestEnabled: boolean;
   setPremiumTestEnabled: (enabled: boolean) => Promise<void>;
+  reloadProducts: () => Promise<void>;
+  productsDebug: {
+    lastLoadError: string | null;
+    lastLoadedAt: number | null;
+    lastCount: number;
+  };
   products: Partial<Record<ProductId, {
     productId: ProductId;
     title?: string;
@@ -136,12 +142,71 @@ function extractNumericPrice(p: any): number | null {
   return parsePriceNumber(p?.price);
 }
 
+async function fetchIapProducts(): Promise<IapState["products"]> {
+  const skus = [PRODUCTS.premium_monthly, PRODUCTS.premium_annual];
+  let subs: any[] | undefined;
+
+  // react-native-iap v14+: use fetchProducts({ skus, type: 'subs' })
+  try {
+    subs = await (RNIap as any).fetchProducts?.({ skus, type: "subs" });
+  } catch (e: any) {
+    const msg = String(e?.message ?? e ?? "fetchProducts failed");
+    throw new Error(msg);
+  }
+
+  // Back-compat: react-native-iap older signatures
+  // If fetchProducts returned empty and the legacy APIs exist, try them once.
+  // (Some environments may have native modules lagging behind JS API.)
+  if (!subs?.length) {
+    try {
+      subs = await (RNIap as any).getSubscriptions?.({ skus });
+    } catch {
+      // ignore
+    }
+    if (!subs?.length) {
+      try {
+        subs = await (RNIap as any).getSubscriptions?.(skus);
+      } catch {
+        // ignore
+      }
+    }
+    if (!subs?.length) {
+      try {
+        subs = await (RNIap as any).getProducts?.({ skus });
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  const map: IapState["products"] = {};
+  for (const p of subs ?? []) {
+    // v14 uses `id`, older versions use `productId`
+    const id = (p.id ?? p.productId) as ProductId;
+    map[id] = {
+      productId: id,
+      title: p.title,
+      description: p.description,
+      localizedPrice: p.displayPrice ?? p.localizedPrice ?? p.localizedPriceAndroid ?? p.price,
+      price: p.price,
+      priceNumber: typeof p.price === "number" ? p.price : extractNumericPrice(p),
+      currency: p.currency ?? p.currencyCodeAndroid ?? null,
+    };
+  }
+  return map;
+}
+
 export function IapProvider(props: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [premiumUntil, setPremiumUntil] = useState<string | null>(null);
   const [lastPurchaseError, setLastPurchaseError] = useState<string | null>(null);
   const [premiumTestEnabled, setPremiumTestEnabledState] = useState(false);
   const [products, setProducts] = useState<IapState["products"]>({});
+  const [productsDebug, setProductsDebug] = useState<IapState["productsDebug"]>({
+    lastLoadError: null,
+    lastLoadedAt: null,
+    lastCount: 0,
+  });
   const validatingRef = useRef(false);
 
   useEffect(() => {
@@ -149,52 +214,23 @@ export function IapProvider(props: { children: React.ReactNode }) {
     (async () => {
       try {
         await RNIap.initConnection();
-      } catch {
-        // ignore
+      } catch (e: any) {
+        setProductsDebug({ lastLoadError: String(e?.message ?? e ?? "initConnection failed"), lastLoadedAt: null, lastCount: 0 });
       }
       const test = await getJson<boolean>("mindshift:premiumTest");
 
       // Best-effort: load localized pricing for paywall UI.
       try {
-        const skus = [PRODUCTS.premium_monthly, PRODUCTS.premium_annual];
-        let subs: any[] | undefined;
-        // react-native-iap has had multiple signatures across versions/platforms.
-        // Try a couple to maximize compatibility.
-        try {
-          subs = await (RNIap as any).getSubscriptions?.({ skus });
-        } catch {
-          // ignore
+        const map = await fetchIapProducts();
+        if (mounted) {
+          setProducts(map);
+          setProductsDebug({ lastLoadError: map && Object.keys(map).length ? null : "Store returned 0 products", lastLoadedAt: Date.now(), lastCount: Object.keys(map).length });
         }
-        if (!subs?.length) {
-          try {
-            subs = await (RNIap as any).getSubscriptions?.(skus);
-          } catch {
-            // ignore
-          }
+      } catch (e: any) {
+        if (mounted) {
+          setProducts({});
+          setProductsDebug({ lastLoadError: String(e?.message ?? e ?? "Product fetch failed"), lastLoadedAt: Date.now(), lastCount: 0 });
         }
-        if (!subs?.length) {
-          try {
-            subs = await (RNIap as any).getProducts?.({ skus });
-          } catch {
-            // ignore
-          }
-        }
-        const map: IapState["products"] = {};
-        for (const p of subs ?? []) {
-          const id = p.productId as ProductId;
-          map[id] = {
-            productId: id,
-            title: p.title,
-            description: p.description,
-            localizedPrice: p.localizedPrice ?? p.localizedPriceAndroid ?? p.price,
-            price: p.price,
-            priceNumber: extractNumericPrice(p),
-            currency: p.currency ?? p.currencyCodeAndroid ?? null,
-          };
-        }
-        if (mounted) setProducts(map);
-      } catch {
-        // ignore
       }
 
       const ent = await refreshEntitlement();
@@ -256,8 +292,19 @@ export function IapProvider(props: { children: React.ReactNode }) {
       }
     });
 
-    const subError = RNIap.purchaseErrorListener(() => {
+    const subError = RNIap.purchaseErrorListener((err) => {
       validatingRef.current = false;
+      const code = String((err as any)?.code ?? "");
+      const message = String((err as any)?.message ?? "");
+      if (code === "E_USER_CANCELLED" || code === "E_USER_CANCELLED_ERROR") {
+        setLastPurchaseError("Purchase canceled.");
+        return;
+      }
+      if (message) {
+        setLastPurchaseError(message);
+        return;
+      }
+      setLastPurchaseError("Purchase failed. Please try again.");
     });
 
     return () => {
@@ -305,6 +352,34 @@ export function IapProvider(props: { children: React.ReactNode }) {
   const buy = async (productId: ProductId, userId: string) => {
     const isSub = productId === PRODUCTS.premium_monthly || productId === PRODUCTS.premium_annual;
     const type: RNIap.MutationRequestPurchaseArgs["type"] = isSub ? "subs" : "in-app";
+
+    // Helpful guard: if StoreKit can't load the SKU, `requestPurchase` will fail with "SKU not found".
+    // Retry loading products once and throw a clearer error if still missing.
+    if (Platform.OS === "ios" && isSub && !products?.[productId]) {
+      try {
+        await RNIap.initConnection();
+      } catch {
+        // ignore
+      }
+      let map: IapState["products"] = {};
+      try {
+        map = await fetchIapProducts();
+        setProducts(map);
+        setProductsDebug({
+          lastLoadError: Object.keys(map).length ? null : "Store returned 0 products",
+          lastLoadedAt: Date.now(),
+          lastCount: Object.keys(map).length,
+        });
+      } catch (e: any) {
+        setProductsDebug({ lastLoadError: String(e?.message ?? e ?? "Product fetch failed"), lastLoadedAt: Date.now(), lastCount: 0 });
+      }
+      if (!map?.[productId]) {
+        throw new Error(
+          "StoreKit couldn’t find this subscription (SKU not found). In App Store Connect, confirm the Paid Apps Agreement is Active and that the subscription products are available for sale under this app (bundle id com.wordcrack.app). It can also take up to ~2 hours after changes for sandbox to propagate.",
+        );
+      }
+    }
+
     const request =
       Platform.OS === "ios"
         ? ({
@@ -341,12 +416,23 @@ export function IapProvider(props: { children: React.ReactNode }) {
       clearLastPurchaseError: () => setLastPurchaseError(null),
       premiumTestEnabled,
       setPremiumTestEnabled,
+      reloadProducts: async () => {
+        try {
+          await RNIap.initConnection();
+        } catch (e: any) {
+          setProductsDebug({ lastLoadError: String(e?.message ?? e ?? "initConnection failed"), lastLoadedAt: Date.now(), lastCount: 0 });
+        }
+        const map = await fetchIapProducts();
+        setProducts(map);
+        setProductsDebug({ lastLoadError: Object.keys(map).length ? null : "Store returned 0 products", lastLoadedAt: Date.now(), lastCount: Object.keys(map).length });
+      },
+      productsDebug,
       products,
       premium: (__DEV__ && premiumTestEnabled) || isPremium(premiumUntil),
       restore,
       buy,
     };
-  }, [loading, premiumUntil, lastPurchaseError, premiumTestEnabled, products]);
+  }, [loading, premiumUntil, lastPurchaseError, premiumTestEnabled, products, productsDebug]);
 
   return <Ctx.Provider value={value}>{props.children}</Ctx.Provider>;
 }

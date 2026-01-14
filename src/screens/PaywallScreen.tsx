@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Alert, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../AppRoot";
 import { useIap } from "../purchases/IapProvider";
@@ -21,9 +21,33 @@ export function PaywallScreen({ navigation }: Props) {
   const [showSuccess, setShowSuccess] = useState(false);
   const [busy, setBusy] = useState(false);
   const [busyText, setBusyText] = useState<string>("Opening payment…");
+  const [didAutoReload, setDidAutoReload] = useState(false);
 
   const annual = iap.products[PRODUCTS.premium_annual];
   const monthly = iap.products[PRODUCTS.premium_monthly];
+  const storeHasMonthly = Boolean(monthly?.localizedPrice || monthly?.title || monthly?.priceNumber);
+  const storeHasAnnual = Boolean(annual?.localizedPrice || annual?.title || annual?.priceNumber);
+  const usingFallbackPrices = !(storeHasMonthly && storeHasAnnual);
+  const storeDebugLine = useMemo(() => {
+    const d = iap.productsDebug;
+    if (!usingFallbackPrices) return `Store pricing loaded from Apple (${d.lastCount} products)`;
+    const base = `Store pricing not loaded (showing fallback) (${d.lastCount} products)`;
+    if (!d.lastLoadError) return base;
+    return `${base} — ${d.lastLoadError}`;
+  }, [iap.productsDebug, usingFallbackPrices]);
+
+  useEffect(() => {
+    // If StoreKit product metadata hasn't loaded yet, try one automatic reload.
+    // This helps avoid confusing "SKU not found" failures due to transient StoreKit/propagation issues.
+    if (Platform.OS !== "ios") return;
+    if (didAutoReload) return;
+    if (!usingFallbackPrices) return;
+    setDidAutoReload(true);
+    const t = setTimeout(() => {
+      void iap.reloadProducts().catch(() => undefined);
+    }, 800);
+    return () => clearTimeout(t);
+  }, [didAutoReload, usingFallbackPrices, iap]);
 
   // If store pricing hasn't loaded yet, show your configured USD defaults so the UI isn't blank.
   // Once IAP product info is available, we use localized store pricing automatically.
@@ -60,11 +84,22 @@ export function PaywallScreen({ navigation }: Props) {
 
   useEffect(() => {
     if (!processing) return;
+    const timeout = setTimeout(() => {
+      // Avoid an indefinite spinner if StoreKit never calls back or validation hangs.
+      setProcessing(false);
+      setBusy(false);
+      Alert.alert(
+        "Still finalizing…",
+        "This is taking longer than expected. Please try “Restore Purchases”. If it still doesn’t activate, ensure you’re on a stable connection and try again.",
+      );
+    }, 35_000);
+
     // Only show success once Premium is actually active.
     if (iap.premium) {
       setProcessing(false);
       setBusy(false);
       setShowSuccess(true);
+      clearTimeout(timeout);
       return;
     }
     // If validation failed server-side, surface the actual error.
@@ -76,14 +111,16 @@ export function PaywallScreen({ navigation }: Props) {
         `${iap.lastPurchaseError}\n\nIf you already completed the purchase, try “Restore Purchases”.`,
       );
       iap.clearLastPurchaseError();
+      clearTimeout(timeout);
     }
+    return () => clearTimeout(timeout);
   }, [processing, iap.premium, iap.lastPurchaseError, navigation]);
 
   const buy = async () => {
     try {
       if (!user?.id) throw new Error("Not signed in");
       iap.clearLastPurchaseError();
-      setBusyText("Opening App Store…");
+      setBusyText(Platform.OS === "ios" ? "Opening App Store…" : "Opening Google Play…");
       setBusy(true);
       setProcessing(true);
       await iap.buy(ctaProduct, user.id);
@@ -92,7 +129,11 @@ export function PaywallScreen({ navigation }: Props) {
     } catch (e: any) {
       setProcessing(false);
       setBusy(false);
-      Alert.alert("Purchase failed", e?.message ?? "Unknown error");
+      Alert.alert(
+        "Purchase failed",
+        e?.message ??
+          "Unknown error. If this keeps happening, confirm the Paid Apps Agreement is active in App Store Connect and try again.",
+      );
     }
   };
 
@@ -264,11 +305,13 @@ export function PaywallScreen({ navigation }: Props) {
               <Text style={styles.cancelPillText}>Cancel anytime</Text>
             </View>
           </View>
+          <Text style={[styles.storeStatus, usingFallbackPrices && styles.storeStatusWarn]}>
+            {storeDebugLine}
+          </Text>
 
           <View style={styles.planRow}>
             <Pressable
               accessibilityRole="button"
-              disabled={iap.loading}
               onPress={() => setSelected("monthly")}
               style={({ pressed }) => [
                 styles.planCard,
@@ -288,7 +331,6 @@ export function PaywallScreen({ navigation }: Props) {
 
             <Pressable
               accessibilityRole="button"
-              disabled={iap.loading}
               onPress={() => setSelected("annual")}
               style={({ pressed }) => [
                 styles.planCard,
@@ -317,26 +359,51 @@ export function PaywallScreen({ navigation }: Props) {
 
           <Pressable
             accessibilityRole="button"
-            disabled={iap.loading || processing}
+            disabled={processing}
             onPress={buy}
             style={({ pressed }) => [
               styles.cta,
-              (iap.loading || processing) && { opacity: 0.6 },
+              processing && { opacity: 0.6 },
               pressed && { opacity: 0.96 },
             ]}
           >
             <Text style={styles.ctaText}>{processing ? "Starting Premium…" : ctaLabel}</Text>
           </Pressable>
 
-          <Pressable accessibilityRole="button" disabled={iap.loading} onPress={restore} style={styles.restoreLink}>
+          <Pressable accessibilityRole="button" disabled={processing} onPress={restore} style={styles.restoreLink}>
             <Text style={styles.restoreLinkText}>Restore Purchases</Text>
           </Pressable>
 
+          {usingFallbackPrices ? (
+            <Pressable
+              accessibilityRole="button"
+              disabled={processing}
+              onPress={async () => {
+                try {
+                  setBusyText("Loading store pricing…");
+                  setBusy(true);
+                  await iap.reloadProducts();
+                  Alert.alert(
+                    "Store products",
+                    `Loaded ${iap.productsDebug.lastCount} products.\n\nMonthly: ${Boolean(iap.products[PRODUCTS.premium_monthly])}\nAnnual: ${Boolean(iap.products[PRODUCTS.premium_annual])}`,
+                  );
+                } catch (e: any) {
+                  Alert.alert("Couldn’t load pricing", e?.message ?? "Unknown error");
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              style={styles.reloadLink}
+            >
+              <Text style={styles.reloadLinkText}>Having trouble? Tap to reload pricing</Text>
+            </Pressable>
+          ) : null}
+
           <Text style={styles.finePrint}>
-            Payment will be charged to your App Store account at confirmation. Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period.
+            Payment will be charged to your {Platform.OS === "ios" ? "App Store" : "Google Play"} account at confirmation. Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period.
           </Text>
           <Text style={styles.finePrint}>
-            You can manage or cancel your subscription in your App Store account settings.
+            You can manage or cancel your subscription in your {Platform.OS === "ios" ? "App Store" : "Google Play"} account settings.
           </Text>
 
           <View style={styles.legalRow}>
@@ -490,6 +557,8 @@ const makeStyles = (colors: any, shadows: any, borderRadius: any, isTabletLike: 
     ...shadows.small,
   },
   planHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  storeStatus: { marginTop: 6, marginBottom: 10, color: colors.text.secondary, fontWeight: "700", fontSize: 12 },
+  storeStatusWarn: { color: colors.primary.orange },
   cancelPill: {
     backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1,
@@ -563,6 +632,8 @@ const makeStyles = (colors: any, shadows: any, borderRadius: any, isTabletLike: 
   ctaSubText: { marginTop: 6, color: "rgba(255,255,255,0.82)", fontWeight: "700", fontSize: 12, textAlign: "center" },
   restoreLink: { alignItems: "center", paddingVertical: 10 },
   restoreLinkText: { color: colors.text.secondary, fontWeight: "700" },
+  reloadLink: { alignItems: "center", paddingVertical: 6 },
+  reloadLinkText: { color: colors.primary.blue, fontWeight: "800" },
   finePrint: { color: colors.text.muted, fontSize: 12, lineHeight: 18, textAlign: "center" },
   legalRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", marginTop: 10, flexWrap: "wrap", gap: 8 },
   legalLink: { color: colors.primary.blue, fontWeight: "800" },
