@@ -13,7 +13,7 @@ const SCRAMBLE_ITEMS: Item[] = [
 
 const CIPHER_ITEMS: Item[] = [
   { type: "check_positions", title: "Check correct positions", subtitle: "Cost: +5s" },
-  { type: "shift_amount", title: "Shift amount", subtitle: "Cost: +8s" },
+  { type: "shift_direction", title: "Reveal direction", subtitle: "Cost: +8s" },
   { type: "unshifted_positions", title: "Unshifted positions", subtitle: "Cost: +10s" },
 ];
 

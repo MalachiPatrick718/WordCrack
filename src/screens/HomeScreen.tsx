@@ -12,12 +12,16 @@ import { useIap } from "../purchases/IapProvider";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
-function msUntilNextUtcHour(now = new Date()): number {
+const PUZZLE_WINDOW_HOURS = 3; // new puzzle every 3 hours (UTC)
+
+function msUntilNextUtcWindow(now = new Date()): number {
+  const h = now.getUTCHours();
+  const delta = PUZZLE_WINDOW_HOURS - (h % PUZZLE_WINDOW_HOURS);
   const next = Date.UTC(
     now.getUTCFullYear(),
     now.getUTCMonth(),
     now.getUTCDate(),
-    now.getUTCHours() + 1,
+    h + delta,
     0,
     0,
     0,
@@ -29,7 +33,8 @@ function getPuzzleWindowKey(now = new Date()): string {
   const yyyy = now.getUTCFullYear();
   const mm = String(now.getUTCMonth() + 1).padStart(2, "0");
   const dd = String(now.getUTCDate()).padStart(2, "0");
-  const hh = String(now.getUTCHours()).padStart(2, "0");
+  const h = now.getUTCHours();
+  const hh = String(Math.floor(h / PUZZLE_WINDOW_HOURS) * PUZZLE_WINDOW_HOURS).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}:${hh}`;
 }
 
@@ -78,7 +83,7 @@ export function HomeScreen({ navigation }: Props) {
       getTodayPuzzleByVariant("scramble"),
     ]);
 
-    // Reset solved flags when a new hour's puzzle id appears.
+    // Reset solved flags when a new puzzle window id appears.
     if (cipherPuzzle.id !== currentCipherIdRef.current) {
       setSolvedCipher(false);
       currentCipherIdRef.current = cipherPuzzle.id;
@@ -111,7 +116,7 @@ export function HomeScreen({ navigation }: Props) {
     if (!scrambleAttempts.error) setSolvedScramble((scrambleAttempts.data?.length ?? 0) > 0);
   };
 
-  // When the UTC hour boundary passes, refresh puzzle state (only while Home is focused).
+  // When the UTC puzzle window boundary passes, refresh puzzle state (only while Home is focused).
   useEffect(() => {
     const k = getPuzzleWindowKey();
     if (k !== prevWindowRef.current) {
@@ -161,7 +166,7 @@ export function HomeScreen({ navigation }: Props) {
     const d = new Date();
     return d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
   }, [tick]);
-  const countdown = useMemo(() => formatHms(msUntilNextUtcHour()), [tick]);
+  const countdown = useMemo(() => formatHms(msUntilNextUtcWindow()), [tick]);
 
   const styles = useMemo(
     () =>

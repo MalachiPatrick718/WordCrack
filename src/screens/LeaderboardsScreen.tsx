@@ -36,8 +36,8 @@ function parseEmojiAvatar(avatar_url: string | null | undefined): string | null 
 
 const TAB_LABELS: Record<Tab, { emoji: string; label: string }> = {
   global: { emoji: "🌍", label: "Global Rankings" },
-  cipher: { emoji: "🔐", label: "This Hour's Cipher Rankings" },
-  scramble: { emoji: "🔀", label: "This Hour's Scramble Rankings" },
+  cipher: { emoji: "🔐", label: "Daily Cipher Leaderboard" },
+  scramble: { emoji: "🔀", label: "Daily Scramble Leaderboard" },
   friends: { emoji: "👥", label: "Friends" },
 };
 
@@ -120,7 +120,7 @@ export function LeaderboardsScreen({ navigation, route }: Props) {
             ? "Friends leaderboards require Premium + an account so you can add friends."
             : (isAnonymous
               ? "Subscribe with Guest Mode. Create an account later to sync Premium across devices."
-              : "Upgrade to MindShiftz Premium to unlock this feature.")
+              : "Upgrade to MindShift Premium to unlock this feature.")
         }
         bullets={[
           "Unlimited practice puzzles",
@@ -253,7 +253,7 @@ export function LeaderboardsScreen({ navigation, route }: Props) {
           <View style={styles.guestCard}>
             <Text style={styles.guestTitle}>🔒 Premium Feature</Text>
             <Text style={styles.guestText}>
-              Friends leaderboards are available with MindShiftz Premium.
+              Friends leaderboards are available with MindShift Premium.
             </Text>
             <Pressable
               accessibilityRole="button"
@@ -363,7 +363,7 @@ export function LeaderboardsScreen({ navigation, route }: Props) {
         {(tab === "cipher" || tab === "scramble") && isFreeUser && (dailyEntries?.length ?? 0) > 5 ? (
           <View style={styles.guestCard}>
             <Text style={styles.guestTitle}>🏆 See the full leaderboard</Text>
-            <Text style={styles.guestText}>Upgrade to MindShiftz Premium to unlock the full list.</Text>
+            <Text style={styles.guestText}>Upgrade to MindShift Premium to unlock the full list.</Text>
             <Pressable
               accessibilityRole="button"
               onPress={() => {
@@ -432,7 +432,7 @@ export function LeaderboardsScreen({ navigation, route }: Props) {
             {isFreeUser && (globalRankings?.length ?? 0) > 5 ? (
               <View style={[styles.guestCard, { marginTop: 14 }]}>
                 <Text style={styles.guestTitle}>🔒 Full Global Rankings</Text>
-                <Text style={styles.guestText}>Upgrade to MindShiftz Premium to view the full rankings list.</Text>
+                <Text style={styles.guestText}>Upgrade to MindShift Premium to view the full rankings list.</Text>
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => {

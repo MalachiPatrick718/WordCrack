@@ -3,8 +3,9 @@ import { handleCors, corsHeaders } from "../_shared/cors.ts";
 import { supabaseAdmin } from "../_shared/supabase.ts";
 import { json } from "../_shared/utils.ts";
 
-// TEMP (testing): rotate puzzles every 2 minutes.
-const PUZZLE_INTERVAL_MS = 2 * 60 * 1000;
+// Reveal a puzzle's target word only after its window has passed.
+// Puzzles rotate every 3 hours (UTC).
+const PUZZLE_INTERVAL_MS = 3 * 60 * 60 * 1000;
 
 type Entry = {
   puzzle_id: string;

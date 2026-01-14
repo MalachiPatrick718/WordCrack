@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View, StyleSheet, Animated, ScrollView, type NativeSyntheticEvent, type TextInputKeyPressEventData } from "react-native";
 import { useAuth } from "../state/AuthProvider";
 import { useTheme } from "../theme/theme";
+import { getJson, setJson } from "../lib/storage";
 
 // Fun OTP digit input component with individual tappable boxes
 function OTPDigitInput({
@@ -156,6 +157,9 @@ const RESEND_COOLDOWN_MS = 30_000;
 const TEST_EMAIL = "test@mindshift.dev";
 const TEST_OTP = "123456";
 const TEST_PASSWORD = "MindShiftMaster2026!";
+const DEMO_MODE_KEY = "mindshift:demoMode";
+const DEMO_TAP_COUNT = 5;
+const DEMO_ALIAS_EMAILS = ["team@mindshift.dev", "test@mindshift.dev"];
 
 export function AuthScreen() {
   const { signInGuest, signInWithEmailOtp, verifyEmailOtp, signInWithPassword } = useAuth();
@@ -167,8 +171,23 @@ export function AuthScreen() {
   const [busy, setBusy] = useState(false);
   const [resendReadyAt, setResendReadyAt] = useState<number>(0);
   const [tick, setTick] = useState(0);
+  const [demoMode, setDemoMode] = useState(false);
+  const logoTapCountRef = useRef(0);
+  const logoTapResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tokenDigits = useMemo(() => token.replace(/[^0-9]/g, ""), [token]);
   const isTokenComplete = tokenDigits.length === 6;
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const saved = await getJson<boolean>(DEMO_MODE_KEY);
+      if (!mounted) return;
+      setDemoMode(Boolean(saved));
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!otpSent) return;
@@ -187,6 +206,20 @@ export function AuthScreen() {
   const sendOtp = async () => {
     try {
       setBusy(true);
+      // Demo mode: don't require a real OTP send.
+      if (demoMode) {
+        if (email.trim().length < 3) {
+          Alert.alert("Enter an email", "Type any email, then enter the demo code 123456.");
+          return;
+        }
+        setOtpSent(true);
+        return;
+      }
+      // Allow a fixed-code demo alias even when demo mode is off (helps App Review).
+      if (DEMO_ALIAS_EMAILS.includes(email.trim().toLowerCase())) {
+        setOtpSent(true);
+        return;
+      }
       // Skip actual OTP for test account
       if (email.trim().toLowerCase() === TEST_EMAIL) {
         setOtpSent(true);
@@ -211,6 +244,16 @@ export function AuthScreen() {
     try {
       if (!isTokenComplete) return;
       setBusy(true);
+      // Demo mode: accept fixed code and sign in as demo account.
+      if (demoMode && tokenDigits === TEST_OTP) {
+        await signInWithPassword(TEST_EMAIL, TEST_PASSWORD);
+        return;
+      }
+      // Demo alias emails: accept fixed code and sign in as demo account (even without demo mode).
+      if (DEMO_ALIAS_EMAILS.includes(email.trim().toLowerCase()) && tokenDigits === TEST_OTP) {
+        await signInWithPassword(TEST_EMAIL, TEST_PASSWORD);
+        return;
+      }
       // Check for test account credentials
       if (email.trim().toLowerCase() === TEST_EMAIL && tokenDigits === TEST_OTP) {
         await signInWithPassword(TEST_EMAIL, TEST_PASSWORD);
@@ -248,13 +291,36 @@ export function AuthScreen() {
       >
         {/* Logo - hide when OTP is shown to save space */}
         {!otpSent && (
-          <View style={styles.logoCard}>
-            <Image
-              source={require("../../assets/icon.png")}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-          </View>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              // Hidden demo mode toggle: tap logo 5x.
+              logoTapCountRef.current += 1;
+              if (logoTapResetTimerRef.current) clearTimeout(logoTapResetTimerRef.current);
+              logoTapResetTimerRef.current = setTimeout(() => {
+                logoTapCountRef.current = 0;
+              }, 1500);
+
+              if (logoTapCountRef.current >= DEMO_TAP_COUNT) {
+                logoTapCountRef.current = 0;
+                if (logoTapResetTimerRef.current) clearTimeout(logoTapResetTimerRef.current);
+                void (async () => {
+                  const next = !demoMode;
+                  setDemoMode(next);
+                  await setJson(DEMO_MODE_KEY, next);
+                  Alert.alert(
+                    next ? "Demo Mode Active" : "Demo Mode Off",
+                    next
+                      ? "Enter any email, then use code 123456 to sign in. (You’ll be logged into the demo account.)"
+                      : "OTP sign-in is back to normal.",
+                  );
+                })();
+              }
+            }}
+            style={styles.logoCard}
+          >
+            <Image source={require("../../assets/icon.png")} style={styles.logo} resizeMode="contain" />
+          </Pressable>
         )}
 
         {/* Welcome Card */}
@@ -288,7 +354,9 @@ export function AuthScreen() {
               <View style={styles.otpSection}>
                 <Text style={styles.otpEmoji}>🔐</Text>
                 <Text style={styles.otpTitle}>Enter your secret code!</Text>
-                <Text style={styles.otpSubtitle}>We sent a 6-digit code to {email}</Text>
+                <Text style={styles.otpSubtitle}>
+                  {demoMode ? "Demo Mode: use code 123456" : `We sent a 6-digit code to ${email}`}
+                </Text>
                 <OTPDigitInput
                   value={token}
                   onChangeText={setToken}
@@ -303,6 +371,10 @@ export function AuthScreen() {
                 onPress={async () => {
                   try {
                     setBusy(true);
+                      if (demoMode) {
+                        Alert.alert("Demo Mode", "No email is sent. Use code 123456.");
+                        return;
+                      }
                     await signInWithEmailOtp(email.trim());
                     setResendReadyAt(Date.now() + RESEND_COOLDOWN_MS);
                     Alert.alert("Code resent", "Check your email for a new 6-digit code.");

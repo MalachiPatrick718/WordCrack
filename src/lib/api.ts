@@ -10,6 +10,7 @@ export type PuzzlePublic = {
   letter_sets: string[][];
   start_idxs?: number[] | null;
   theme_hint: string | null;
+  shift_amount?: number | null; // cipher only
 };
 
 export type Attempt = {
@@ -120,7 +121,7 @@ export async function submitFeedback(args: {
   return res.feedback;
 }
 
-export type HintType = "check_positions" | "reveal_position" | "reveal_theme" | "shift_amount" | "unshifted_positions";
+export type HintType = "check_positions" | "reveal_position" | "reveal_theme" | "shift_direction" | "shift_amount" | "unshifted_positions";
 
 export async function useHint(
   attempt_id: string,

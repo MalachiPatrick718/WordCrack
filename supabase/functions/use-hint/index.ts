@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
     const variant = String((puzzle as any)?.variant ?? "scramble");
     const allowed =
       variant === "cipher"
-        ? (["shift_amount", "unshifted_positions", "check_positions"] as const)
+        ? (["shift_direction", "unshifted_positions", "check_positions", "shift_amount"] as const) // shift_amount kept for compatibility
         : (["check_positions", "reveal_position", "reveal_theme"] as const);
     if (!(allowed as readonly string[]).includes(hint_type)) {
       return json({ error: `Invalid hint_type for ${variant} puzzle` }, { status: 400, headers: corsHeaders });

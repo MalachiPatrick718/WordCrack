@@ -73,7 +73,7 @@ export function SettingsScreen({ navigation }: Props) {
           setPrefs(prevPrefs);
           Alert.alert(
             "Enable notifications",
-            "To turn on hourly reminders, allow notifications for MindShiftz. If you previously denied it, enable it in system settings.",
+            "To turn on hourly reminders, allow notifications for MindShift. If you previously denied it, enable it in system settings.",
             [
               { text: "Not now", style: "cancel" },
               { text: "Open Settings", onPress: () => void Linking.openSettings().catch(() => undefined) },
@@ -195,7 +195,7 @@ export function SettingsScreen({ navigation }: Props) {
                 void (async () => {
                   try {
                     const Share = require("react-native").Share;
-                    await Share.share({ message: `Add me on MindShiftz! My code: ${inviteCode}` });
+                    await Share.share({ message: `Add me on MindShift! My code: ${inviteCode}` });
                   } catch {
                     Alert.alert("Share failed");
                   }
@@ -219,7 +219,7 @@ export function SettingsScreen({ navigation }: Props) {
           <Text style={styles.cardTitle}>Notifications</Text>
         </View>
         <View style={styles.settingRow}>
-          <Text style={styles.settingLabel}>Hourly reminders</Text>
+          <Text style={styles.settingLabel}>Puzzle reminders</Text>
           <Switch
             value={prefs.pushEnabled}
             onValueChange={togglePush}
@@ -239,7 +239,7 @@ export function SettingsScreen({ navigation }: Props) {
           <Text style={styles.cardTitle}>Feedback</Text>
         </View>
         <Text style={styles.cardDescription}>
-          Send feedback, bugs, or feature requests. This goes straight to the MindShiftz team.
+          Send feedback, bugs, or feature requests. This goes straight to the MindShift team.
         </Text>
         <TextInput
           multiline
@@ -322,7 +322,7 @@ export function SettingsScreen({ navigation }: Props) {
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <Text style={styles.cardIcon}>⭐</Text>
-          <Text style={styles.cardTitle}>{iap.premium ? "MindShiftz Premium" : "Upgrade to MindShiftz Premium"}</Text>
+          <Text style={styles.cardTitle}>{iap.premium ? "MindShift Premium" : "Upgrade to MindShift Premium"}</Text>
         </View>
         <Text style={{ color: colors.text.secondary, marginBottom: 8 }}>Status: {entitlementLabel}</Text>
         <Text style={styles.cardDescription}>
@@ -472,7 +472,7 @@ export function SettingsScreen({ navigation }: Props) {
         </View>
       ) : null}
 
-      <Text style={styles.version}>MindShiftz v1.0.0</Text>
+      <Text style={styles.version}>MindShift v1.0.0</Text>
 
     </ScrollView>
   );

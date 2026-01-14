@@ -3,7 +3,8 @@ import { getJson, setJson } from "./storage";
 
 const KEY = "mindshift:dailyReminder";
 const ANDROID_CHANNEL_ID = "default";
-const HOURLY_SECONDS = 60 * 60;
+const PUZZLE_WINDOW_HOURS = 3;
+const WINDOW_SECONDS = PUZZLE_WINDOW_HOURS * 60 * 60;
 
 type Stored = {
   enabled: boolean;
@@ -11,6 +12,8 @@ type Stored = {
   notificationId?: string;
   // New: schedule multiple upcoming notifications aligned to the UTC puzzle boundary.
   notificationIds?: string[];
+  // New: end-of-day leaderboard reminder (UTC).
+  leaderboardNotificationIds?: string[];
   hour: number;
   minute: number;
 };
@@ -44,12 +47,25 @@ async function cancelPrevious(prev: Stored | null): Promise<void> {
   }
 }
 
-function nextUtcHourBoundary(now = new Date()): Date {
+function nextUtcWindowBoundary(now = new Date()): Date {
   const d = new Date(now);
   d.setUTCMilliseconds(0);
   d.setUTCSeconds(0);
   d.setUTCMinutes(0);
-  d.setUTCHours(now.getUTCHours() + 1);
+  const h = now.getUTCHours();
+  const delta = PUZZLE_WINDOW_HOURS - (h % PUZZLE_WINDOW_HOURS);
+  d.setUTCHours(h + delta);
+  return d;
+}
+
+function nextUtcMidnight(now = new Date()): Date {
+  const d = new Date(now);
+  d.setUTCMilliseconds(0);
+  d.setUTCSeconds(0);
+  d.setUTCMinutes(0);
+  d.setUTCHours(0);
+  // Next midnight (if we're already at midnight, schedule tomorrow).
+  if (d.getTime() <= now.getTime()) d.setUTCDate(d.getUTCDate() + 1);
   return d;
 }
 
@@ -61,17 +77,17 @@ export async function enableDailyReminder(hour = 9, minute = 0): Promise<void> {
   await cancelPrevious(prev ?? null);
 
   // Android (Expo Notifications) does NOT support `calendar` triggers.
-  // To keep "top of the hour" alignment, schedule the next 24 hour-boundary notifications as DATE triggers.
-  const first = nextUtcHourBoundary();
-  const count = 24;
+  // To keep "puzzle window boundary" alignment, schedule the next 24h worth of notifications as DATE triggers.
+  const first = nextUtcWindowBoundary();
+  const count = Math.ceil(24 / PUZZLE_WINDOW_HOURS);
   const ids: string[] = [];
 
   for (let i = 0; i < count; i++) {
-    const at = new Date(first.getTime() + i * HOURLY_SECONDS * 1000);
+    const at = new Date(first.getTime() + i * WINDOW_SECONDS * 1000);
     // eslint-disable-next-line no-await-in-loop
     const id = await Notifications.scheduleNotificationAsync({
       content: {
-        title: "New MindShiftz Puzzle Available",
+        title: "New MindShift Puzzle Available",
         body: "A new puzzle is ready. Tap to play.",
       },
       trigger: {
@@ -83,7 +99,29 @@ export async function enableDailyReminder(hour = 9, minute = 0): Promise<void> {
     ids.push(id);
   }
 
-  await setJson(KEY, { enabled: true, notificationIds: ids, hour, minute });
+  // End-of-day leaderboard reminder (00:05 UTC).
+  const leaderboardIds: string[] = [];
+  const firstMidnight = nextUtcMidnight();
+  const EOD_COUNT = 7; // schedule a week ahead (simple + reliable on both iOS/Android)
+  for (let i = 0; i < EOD_COUNT; i++) {
+    const at = new Date(firstMidnight.getTime() + i * 24 * 60 * 60 * 1000 + 5 * 60 * 1000);
+    // eslint-disable-next-line no-await-in-loop
+    const id = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "Daily leaderboard is final 🏆",
+        body: "Tap to see where you placed today.",
+        data: { kind: "daily_leaderboard_final" },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: at,
+        channelId: ANDROID_CHANNEL_ID,
+      },
+    });
+    leaderboardIds.push(id);
+  }
+
+  await setJson(KEY, { enabled: true, notificationIds: ids, leaderboardNotificationIds: leaderboardIds, hour, minute });
 }
 
 export async function disableDailyReminder(): Promise<void> {
@@ -103,8 +141,8 @@ export async function sendTestNewPuzzleNotification(opts?: { delaySeconds?: numb
   // Schedule a real OS notification so it can be seen even if the app is backgrounded.
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: "New MindShiftz Puzzle Available",
-      body: "Test notification — this doesn’t change your countdown. New puzzles unlock at the next UTC hour.",
+      title: "New MindShift Puzzle Available",
+      body: "Test notification — this doesn’t change your countdown. New puzzles unlock every 3 hours (UTC).",
       data: { kind: "test_new_puzzle" },
     },
     trigger: {

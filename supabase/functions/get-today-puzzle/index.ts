@@ -3,10 +3,12 @@ import { handleCors, corsHeaders } from "../_shared/cors.ts";
 import { supabaseAdmin } from "../_shared/supabase.ts";
 import { assertUpperAlpha, getUtcDateString, json } from "../_shared/utils.ts";
 import { generateCipherPuzzleFromTarget, generateScramblePuzzleFromTarget } from "../_shared/puzzlegen.ts";
+import { computeCipherShiftInfo } from "../_shared/mindshift.ts";
 
-// Hourly puzzles (UTC). Cipher=5 letters, Scramble=6 letters.
+// Windowed puzzles (UTC). Cipher=5 letters, Scramble=6 letters.
 const CIPHER_LEN = 5;
 const SCRAMBLE_LEN = 6;
+const PUZZLE_WINDOW_HOURS = 3; // new puzzle every 3 hours
 
 function isValidScramblePuzzlePublicRow(p: any): boolean {
   try {
@@ -62,7 +64,13 @@ function isValidCipherPuzzlePublicRow(p: any): boolean {
 }
 
 function getPuzzleSlot(now = new Date()): number {
-  return now.getUTCHours();
+  const h = now.getUTCHours();
+  return Math.floor(h / PUZZLE_WINDOW_HOURS) * PUZZLE_WINDOW_HOURS; // 0,3,6,...21
+}
+
+function normalizeSlot(slot: number): number {
+  const s = Math.floor(Number(slot));
+  return Math.floor(s / PUZZLE_WINDOW_HOURS) * PUZZLE_WINDOW_HOURS;
 }
 
 Deno.serve(async (req) => {
@@ -82,15 +90,16 @@ Deno.serve(async (req) => {
     if (variant !== "cipher" && variant !== "scramble") {
       return json({ error: "Invalid variant (expected cipher|scramble)" }, { status: 400, headers: corsHeaders });
     }
-    const slot = slotParam == null ? getPuzzleSlot() : Number(slotParam);
+    const slot = slotParam == null ? getPuzzleSlot() : normalizeSlot(Number(slotParam));
     if (!Number.isFinite(slot) || slot < 0 || slot > 23) {
       return json({ error: "Invalid slot (expected 0-23)" }, { status: 400, headers: corsHeaders });
     }
 
     const supabase = supabaseAdmin();
+    // Read from base table using service role so we can compute cipher shift amount (without exposing target_word to clients).
     const { data, error } = await supabase
-      .from("puzzles_public")
-      .select("id,puzzle_date,puzzle_hour,kind,variant,cipher_word,letter_sets,start_idxs,theme_hint")
+      .from("puzzles")
+      .select("id,puzzle_date,puzzle_hour,kind,variant,cipher_word,letter_sets,start_idxs,theme_hint,target_word")
       .eq("puzzle_date", date)
       .eq("puzzle_hour", slot)
       .eq("kind", "daily")
@@ -98,7 +107,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (error) return json({ error: error.message }, { status: 500, headers: corsHeaders });
-    let puzzle = data;
+    let puzzle = data as any;
     const isValid = variant === "cipher" ? isValidCipherPuzzlePublicRow : isValidScramblePuzzlePublicRow;
     // If an older puzzle exists for this slot/variant, delete it and regenerate.
     if (puzzle && !isValid(puzzle)) {
@@ -152,8 +161,8 @@ Deno.serve(async (req) => {
       }
 
       const reread = await supabase
-        .from("puzzles_public")
-        .select("id,puzzle_date,puzzle_hour,kind,variant,cipher_word,letter_sets,start_idxs,theme_hint")
+        .from("puzzles")
+        .select("id,puzzle_date,puzzle_hour,kind,variant,cipher_word,letter_sets,start_idxs,theme_hint,target_word")
         .eq("puzzle_date", date)
         .eq("puzzle_hour", slot)
         .eq("kind", "daily")
@@ -163,10 +172,23 @@ Deno.serve(async (req) => {
       if (reread.error) return json({ error: reread.error.message }, { status: 500, headers: corsHeaders });
       if (!reread.data) return json({ error: "Puzzle not found after create" }, { status: 500, headers: corsHeaders });
 
-      return json({ puzzle: reread.data, slot, variant }, { headers: corsHeaders });
+      const row: any = reread.data;
+      const shift_amount =
+        variant === "cipher"
+          ? (computeCipherShiftInfo(String(row.cipher_word ?? ""), String(row.target_word ?? ""))?.amount ?? null)
+          : null;
+      const publicPuzzle = { ...row, shift_amount };
+      delete (publicPuzzle as any).target_word;
+      return json({ puzzle: publicPuzzle, slot, variant }, { headers: corsHeaders });
     }
 
-    return json({ puzzle, slot, variant }, { headers: corsHeaders });
+    const shift_amount =
+      variant === "cipher"
+        ? (computeCipherShiftInfo(String(puzzle.cipher_word ?? ""), String(puzzle.target_word ?? ""))?.amount ?? null)
+        : null;
+    const publicPuzzle = { ...puzzle, shift_amount };
+    delete (publicPuzzle as any).target_word;
+    return json({ puzzle: publicPuzzle, slot, variant }, { headers: corsHeaders });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     return json({ error: msg }, { status: 500, headers: corsHeaders });

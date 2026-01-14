@@ -1,9 +1,16 @@
-export type HintType = "check_positions" | "reveal_position" | "reveal_theme" | "shift_amount" | "unshifted_positions";
+export type HintType =
+  | "check_positions"
+  | "reveal_position"
+  | "reveal_theme"
+  | "shift_direction"
+  | "shift_amount" // legacy (kept for compatibility; not shown in UI)
+  | "unshifted_positions";
 
 export const HINT_PENALTY_MS: Record<HintType, number> = {
   check_positions: 5_000,
   reveal_position: 8_000,
   reveal_theme: 10_000,
+  shift_direction: 8_000,
   shift_amount: 8_000,
   unshifted_positions: 10_000,
 };
@@ -21,7 +28,7 @@ function charToN(c: string): number {
   return code - 65;
 }
 
-function shiftAmount(cipherWord: string, targetWord: string): number | null {
+function shiftDiff(cipherWord: string, targetWord: string): number | null {
   const shifted = computeShiftedPositions(cipherWord, targetWord);
   const idx = shifted.findIndex((v) => v);
   if (idx < 0) return null;
@@ -29,8 +36,18 @@ function shiftAmount(cipherWord: string, targetWord: string): number | null {
   const c = charToN(cipherWord[idx]);
   const diff = (c - t + 26) % 26;
   if (diff === 0) return null;
-  // Do NOT reveal direction; return magnitude only.
-  return Math.min(diff, 26 - diff);
+  return diff;
+}
+
+export function computeCipherShiftInfo(cipherWord: string, targetWord: string): { amount: number; direction: "left" | "right" } | null {
+  const diff = shiftDiff(cipherWord, targetWord);
+  if (diff == null) return null;
+  // If cipher letter is "ahead" of target by <= 13, it was shifted right by diff.
+  // If > 13, it was shifted left by (26 - diff).
+  const direction = diff <= 13 ? "right" : "left";
+  const amount = Math.min(diff, 26 - diff);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  return { amount, direction };
 }
 
 function pickRandom<T>(arr: T[], count: number): T[] {
@@ -71,9 +88,19 @@ export function buildHintMessage(args: {
 
   if (args.hintType === "shift_amount") {
     if (len !== 5) throw new Error("shift_amount hint is only valid for 5-letter cipher puzzles");
-    const amount = shiftAmount(args.cipherWord, args.targetWord);
-    if (amount == null) return { message: "No shift detected (already solved).", meta: { shiftAmount: null } };
-    return { message: `Shift amount: ${amount} (direction hidden).`, meta: { shiftAmount: amount } };
+    const info = computeCipherShiftInfo(args.cipherWord, args.targetWord);
+    if (!info) return { message: "No shift detected (already solved).", meta: { shiftAmount: null } };
+    return { message: `Shift amount: ${info.amount} (direction hidden).`, meta: { shiftAmount: info.amount } };
+  }
+
+  if (args.hintType === "shift_direction") {
+    if (len !== 5) throw new Error("shift_direction hint is only valid for 5-letter cipher puzzles");
+    const info = computeCipherShiftInfo(args.cipherWord, args.targetWord);
+    if (!info) return { message: "No shift detected (already solved).", meta: { direction: null } };
+    return {
+      message: `Direction: ${info.direction.toUpperCase()} (shift amount is shown on the puzzle).`,
+      meta: { direction: info.direction },
+    };
   }
 
   if (args.hintType === "unshifted_positions") {

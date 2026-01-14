@@ -14,7 +14,7 @@ import { PuzzleIntroModal } from "../components/PuzzleIntroModal";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Puzzle">;
 
-// Hourly puzzles are governed by server time; do not restart timers client-side.
+// Puzzles are governed by server time (3-hour windows); do not restart timers client-side.
 const CIPHER_LEN = 5;
 const SCRAMBLE_LEN = 6;
 
@@ -37,6 +37,8 @@ export function PuzzleScreen({ navigation, route }: Props) {
   const [loading, setLoading] = useState(true);
   const [puzzleId, setPuzzleId] = useState<string | null>(null);
   const [cipherWord, setCipherWord] = useState<string>("");
+  const [shiftAmount, setShiftAmount] = useState<number | null>(null);
+  const [shiftDirection, setShiftDirection] = useState<"left" | "right" | null>(null);
   const [letterSets, setLetterSets] = useState<string[][]>([]);
   const [startIdxs, setStartIdxs] = useState<number[] | null>(null);
   const [themeHint, setThemeHint] = useState<string | null>(null);
@@ -112,6 +114,8 @@ export function PuzzleScreen({ navigation, route }: Props) {
         if (!mounted) return;
         setPuzzleId(puzzle.id);
         setCipherWord(puzzle.cipher_word);
+        setShiftAmount(variant === "cipher" ? (Number((puzzle as any).shift_amount) || null) : null);
+        setShiftDirection(null);
         setLetterSets(puzzle.letter_sets);
         const si =
           Array.isArray((puzzle as any).start_idxs) && ((puzzle as any).start_idxs as unknown[]).length === wordLen
@@ -254,6 +258,10 @@ export function PuzzleScreen({ navigation, route }: Props) {
       setShowHintPicker(false);
       setHintMessage(res.message);
       setShowHint(true);
+      if (type === "shift_direction") {
+        const dir = String((res.meta as any)?.direction ?? "").toLowerCase();
+        if (dir === "left" || dir === "right") setShiftDirection(dir as any);
+      }
     } catch (e: any) {
       setShowHintPicker(false);
       Alert.alert("Hint failed", e?.message ?? "Unknown error");
@@ -347,12 +355,26 @@ export function PuzzleScreen({ navigation, route }: Props) {
     <View style={styles.container}>
       {/* Ciphered Word Display */}
       <View style={styles.cipherContainer}>
-        <Text style={styles.cipherLabel}>{variant === "cipher" ? "Ciphered Word" : "Scrambled Word"}</Text>
-        {variant === "cipher" && themeHint && (
-          <View style={styles.themePill}>
-            <Text style={styles.themePillText}>Theme: {titleCaseTheme(themeHint)}</Text>
+        <View style={styles.cipherHeaderRow}>
+          <Text style={styles.cipherLabel}>{variant === "cipher" ? "Ciphered Word" : "Scrambled Word"}</Text>
+          <Pressable accessibilityRole="button" onPress={() => setShowIntro(true)} style={styles.helpButton}>
+            <Text style={styles.helpButtonText}>?</Text>
+          </Pressable>
+        </View>
+        {variant === "cipher" ? (
+          <View style={styles.pillsRow}>
+            {themeHint ? (
+              <View style={styles.themePill}>
+                <Text style={styles.themePillText}>Theme: {titleCaseTheme(themeHint)}</Text>
+              </View>
+            ) : null}
+            <View style={styles.shiftPill}>
+              <Text style={styles.shiftPillText}>
+                Shift: {shiftAmount ?? "—"} {shiftDirection ? `(Dir: ${shiftDirection.toUpperCase()})` : "(Dir: ?)"}
+              </Text>
+            </View>
           </View>
-        )}
+        ) : null}
         <View style={styles.cipherTiles}>
           {(() => {
             // Cipher: visible before Start, but hidden when paused.
@@ -573,14 +595,31 @@ function makeStyles(
     alignItems: "center",
     marginBottom: 12,
   },
+  cipherHeaderRow: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
   cipherLabel: {
     fontSize: 14,
     fontWeight: "600",
     color: colors.text.secondary,
-    marginBottom: 8,
   },
+  helpButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.ui.border,
+    backgroundColor: colors.background.card,
+  },
+  helpButtonText: { fontSize: 18, fontWeight: "900", color: colors.text.primary, marginTop: -1 },
+  pillsRow: { width: "100%", flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center", marginBottom: 10 },
   themePill: {
-    marginBottom: 10,
     backgroundColor: colors.background.card,
     borderWidth: 1,
     borderColor: colors.ui.border,
@@ -593,6 +632,15 @@ function makeStyles(
     fontWeight: "700",
     fontSize: 13,
   },
+  shiftPill: {
+    backgroundColor: colors.background.card,
+    borderWidth: 1,
+    borderColor: colors.ui.border,
+    borderRadius: borderRadius.round,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  shiftPillText: { color: colors.text.primary, fontWeight: "800", fontSize: 13 },
   cipherTiles: {
     flexDirection: "row",
     gap: wordLen === 6 ? 4 : 6,

@@ -13,7 +13,7 @@ export function OnboardingScreen({ onComplete }: { navigation: any; onComplete: 
     () => [
       {
         emoji: "👋",
-        title: "Welcome to MindShiftz",
+        title: "Welcome to MindShift",
         body: "Beat the clock. Choose Cipher or Scramble and climb the leaderboards.",
       },
       ...HOW_TO_PLAY_SLIDES,

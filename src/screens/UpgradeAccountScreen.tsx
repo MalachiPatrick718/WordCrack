@@ -73,7 +73,7 @@ export function UpgradeAccountScreen({ navigation, route }: Props) {
 
       <View style={styles.card}>
         <Text style={styles.subtitle}>
-          You’re currently playing as a guest. Create an account to unlock MindShiftz Premium and keep your progress.
+          You’re currently playing as a guest. Create an account to unlock MindShift Premium and keep your progress.
         </Text>
 
         <Text style={styles.label}>Email</Text>

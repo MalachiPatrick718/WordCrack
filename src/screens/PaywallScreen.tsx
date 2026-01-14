@@ -79,7 +79,7 @@ export function PaywallScreen({ navigation }: Props) {
   }, [annual?.priceNumber, monthly?.priceNumber]);
 
   const ctaProduct = selected === "annual" ? PRODUCTS.premium_annual : PRODUCTS.premium_monthly;
-  const ctaLabel = selected === "annual" ? "Start MindShiftz Premium Annual" : "Start MindShiftz Premium Monthly";
+  const ctaLabel = selected === "annual" ? "Start MindShift Premium Annual" : "Start MindShift Premium Monthly";
   const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
@@ -182,7 +182,7 @@ export function PaywallScreen({ navigation }: Props) {
               <Text style={styles.successEmoji}>🎉</Text>
             </View>
             <Text style={styles.successTitle}>Premium unlocked!</Text>
-            <Text style={styles.successText}>You’re all set. Enjoy the full MindShiftz experience.</Text>
+            <Text style={styles.successText}>You’re all set. Enjoy the full MindShift experience.</Text>
 
             <View style={styles.successBullets}>
               <Text style={styles.successBullet}>🧩 Unlimited practice puzzles</Text>
@@ -208,7 +208,7 @@ export function PaywallScreen({ navigation }: Props) {
         <Pressable accessibilityRole="button" onPress={() => navigation.goBack()} style={styles.back}>
           <Text style={styles.backText}>‹</Text>
         </Pressable>
-        <Text style={styles.topTitle}>MindShiftz Premium</Text>
+        <Text style={styles.topTitle}>MindShift Premium</Text>
         <View style={{ width: 36 }} />
       </View>
 
@@ -219,7 +219,7 @@ export function PaywallScreen({ navigation }: Props) {
           <View style={styles.heroGlowB} />
           <View style={styles.heroPillRow}>
             <View style={styles.heroPill}>
-              <Text style={styles.heroPillText}>⭐ MindShiftz Premium</Text>
+              <Text style={styles.heroPillText}>⭐ MindShift Premium</Text>
             </View>
             {savePct ? (
               <View style={styles.heroPillAlt}>

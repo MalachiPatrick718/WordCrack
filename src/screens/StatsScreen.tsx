@@ -59,7 +59,7 @@ export function StatsScreen({ navigation }: Props) {
         subtitle={
           isAnonymous
             ? "Subscribe with Guest Mode. Create an account later to sync Premium across devices."
-            : "Upgrade to MindShiftz Premium to unlock full stats."
+            : "Upgrade to MindShift Premium to unlock full stats."
         }
         bullets={[
           "Best time + hints breakdown",

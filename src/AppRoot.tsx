@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { DarkTheme as NavDarkTheme, DefaultTheme as NavDefaultTheme, NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { ActivityIndicator, StatusBar, View } from "react-native";
+import { StatusBar } from "react-native";
 import { AuthProvider, useAuth } from "./state/AuthProvider";
 import { getJson } from "./lib/storage";
 import { supabase } from "./lib/supabase";
@@ -20,6 +20,7 @@ import { PaywallScreen } from "./screens/PaywallScreen";
 import { HowToPlayScreen } from "./screens/HowToPlayScreen";
 import { UpgradeAccountScreen } from "./screens/UpgradeAccountScreen";
 import { ThemeProvider, useTheme } from "./theme/theme";
+import { BootSplash } from "./components/BootSplash";
 
 export type RootStackParamList = {
   Onboarding: undefined;
@@ -54,6 +55,21 @@ function BootRouter() {
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
   const [profile, setProfile] = useState<{ username: string; avatar_url: string | null } | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [profileTimedOut, setProfileTimedOut] = useState(false);
+  const [profileChecked, setProfileChecked] = useState(false);
+  const BOOT_MIN_MS = 3200; // ~3–4s branded boot splash
+  const BOOT_MAX_MS = 12_000; // never mask a real hang forever
+  const [minElapsed, setMinElapsed] = useState(false);
+  const [maxElapsed, setMaxElapsed] = useState(false);
+
+  useEffect(() => {
+    const minT = setTimeout(() => setMinElapsed(true), BOOT_MIN_MS);
+    const maxT = setTimeout(() => setMaxElapsed(true), BOOT_MAX_MS);
+    return () => {
+      clearTimeout(minT);
+      clearTimeout(maxT);
+    };
+  }, []);
 
   useEffect(() => {
     // Keep the storage read in this file to avoid coupling boot logic to the onboarding UI.
@@ -83,25 +99,39 @@ function BootRouter() {
     let mounted = true;
     (async () => {
       if (!user) {
-        if (mounted) setProfile(null);
+        if (mounted) {
+          setProfile(null);
+          setProfileChecked(true);
+          setProfileTimedOut(false);
+          setProfileLoading(false);
+        }
         return;
       }
       try {
         if (mounted) setProfileLoading(true);
+        if (mounted) setProfileTimedOut(false);
+        if (mounted) setProfileChecked(false);
         const req = supabase
           .from("profiles")
           .select("username,avatar_url")
           .eq("user_id", user.id)
           .maybeSingle();
         // Safety: don't allow a network hang to keep the app on a spinner forever.
-        const { data } = await Promise.race([
-          req,
-          new Promise<{ data: null }>((resolve) => setTimeout(() => resolve({ data: null }), 6000)),
+        const result = await Promise.race([
+          req.then((r) => ({ kind: "ok" as const, data: (r as any)?.data ?? null })),
+          new Promise<{ kind: "timeout" }>((resolve) => setTimeout(() => resolve({ kind: "timeout" }), 8000)),
         ]);
         if (!mounted) return;
-        if (data) setProfile({ username: data.username, avatar_url: data.avatar_url ?? null });
+        if (result.kind === "timeout") {
+          setProfileTimedOut(true);
+          setProfileChecked(true);
+          return;
+        }
+        if (result.data) setProfile({ username: result.data.username, avatar_url: result.data.avatar_url ?? null });
+        setProfileChecked(true);
       } catch {
         // ignore
+        if (mounted) setProfileChecked(true);
       } finally {
         if (mounted) setProfileLoading(false);
       }
@@ -111,35 +141,28 @@ function BootRouter() {
     };
   }, [user]);
 
-  if (initializing || onboarded === null) {
-    return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator />
-      </View>
-    );
-  }
-
   const isAnonymous = Boolean((user as any)?.is_anonymous) || (user as any)?.app_metadata?.provider === "anonymous";
-  const needsProfileSetup =
-    !!user &&
-    !isAnonymous &&
-    (!profile || profile.username === "player" || profile.username.startsWith("player_") || !profile.avatar_url);
+  // Profile setup is optional and can be edited from Settings.
+  // We do NOT force users back into ProfileSetup on relaunch (this caused confusing, racey routing).
 
   // Important: avoid showing Home first on fresh signups.
-  // Wait for profile to load for signed-in non-guest users, then choose the initial route.
-  if (user && !isAnonymous && profileLoading) {
-    return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator />
-      </View>
-    );
+  // Wait for auth + onboarding; do not block the app on profile fetch.
+  const isBootBusy =
+    initializing ||
+    onboarded === null ||
+    false;
+
+  // Keep an in-app branded splash visible for a minimum duration,
+  // but never block beyond a hard cap.
+  if ((isBootBusy && !maxElapsed) || (!minElapsed && !maxElapsed)) {
+    return <BootSplash subtitle={!minElapsed ? "Loading…" : "Almost there…"} />;
   }
 
   return (
     <Stack.Navigator
-      key={!onboarded ? "onboarding" : !user ? "auth" : needsProfileSetup ? "profile-setup" : "home"}
+      key={!onboarded ? "onboarding" : !user ? "auth" : "app"}
       initialRouteName={
-        !onboarded ? "Onboarding" : !user ? "Auth" : needsProfileSetup ? "ProfileSetup" : "Home"
+        !onboarded ? "Onboarding" : !user ? "Auth" : "Home"
       }
       screenOptions={{
         headerTintColor: theme.colors.text.primary,
@@ -163,21 +186,21 @@ function BootRouter() {
       ) : (
         <>
           <Stack.Screen
-            name="ProfileSetup"
-            component={ProfileSetupScreen}
-            options={{ title: "Profile" }}
-            initialParams={{
-              initialUsername: profile?.username ?? "player",
-              initialAvatarUrl: profile?.avatar_url ?? undefined,
-            }}
-          />
-          <Stack.Screen
             name="Home"
             component={HomeScreen}
             options={{
               title: "",
               headerStyle: { backgroundColor: theme.colors.background.main },
               headerShadowVisible: false,
+            }}
+          />
+          <Stack.Screen
+            name="ProfileSetup"
+            component={ProfileSetupScreen}
+            options={{ title: "Profile" }}
+            initialParams={{
+              initialUsername: profile?.username ?? "player",
+              initialAvatarUrl: profile?.avatar_url ?? undefined,
             }}
           />
           <Stack.Screen

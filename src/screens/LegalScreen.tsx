@@ -11,7 +11,7 @@ Privacy Policy
 
 Effective date: 2026-01-09
 
-MindShiftz (“we”, “us”) provides the MindShiftz mobile app.
+MindShift (“we”, “us”) provides the MindShift mobile app.
 
 Data we collect
 - Account data: email (if you upgrade from guest), username, avatar (optional)
@@ -36,7 +36,7 @@ Terms of Service
 
 Effective date: 2026-01-09
 
-By using MindShiftz you agree to these terms.
+By using MindShift you agree to these terms.
 
 Subscriptions / Purchases
 - Premium features may be sold via the App Store

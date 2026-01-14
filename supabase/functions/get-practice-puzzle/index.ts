@@ -6,6 +6,7 @@ import { getUtcDateString, json } from "../_shared/utils.ts";
 import { withCors } from "../_shared/http.ts";
 import { assertUpperAlpha } from "../_shared/utils.ts";
 import { generateCipherPuzzleFromTarget, generateScramblePuzzleFromTarget } from "../_shared/puzzlegen.ts";
+import { computeCipherShiftInfo } from "../_shared/mindshift.ts";
 
 function letterSetContains(set: unknown, letter: string): boolean {
   if (!Array.isArray(set)) return false;
@@ -116,8 +117,12 @@ Deno.serve(async (req) => {
 
     if (insErr) return json({ error: insErr.message }, { status: 500, headers: corsHeaders });
 
+    const shift_amount =
+      variant === "cipher"
+        ? (computeCipherShiftInfo(String(inserted.cipher_word ?? ""), target_word)?.amount ?? null)
+        : null;
     return json(
-      { puzzle: inserted, variant, is_premium, limit, used: used + 1, remaining: is_premium ? 999999 : Math.max(0, limit - (used + 1)) },
+      { puzzle: { ...(inserted as any), shift_amount }, variant, is_premium, limit, used: used + 1, remaining: is_premium ? 999999 : Math.max(0, limit - (used + 1)) },
       { headers: corsHeaders },
     );
   } catch (e) {
